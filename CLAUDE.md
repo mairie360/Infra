@@ -14,6 +14,8 @@ rebuilt from scratch; secrets are created here and filled by `mairie360/ansible`
   (`tests/check_prevent_destroy.sh`); secrets also set `protected = true`.
 - The vault secret names and the `/<org>/<env>` path are a contract with role
   `k8s_instance_secrets` of `ansible` (`vault_entries`, `vault_path`).
+- CI: `.github/workflows/cicd.yml` calls `terraform_cicd.yml` of `mairie360/CICD` pinned by
+  tag (`cicd_version` = same tag); new roots go in its `roots` input.
 - Every change ships a `terraform test` (`<root>/tests/*.tftest.hcl`,
   `mock_provider "scaleway"`).
 - Commits: Conventional Commits, English; Jira ↔ GitHub flow of the root

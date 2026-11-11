@@ -69,4 +69,6 @@ bash tests/check_prevent_destroy.sh
 ```
 
 The tests mock the Scaleway provider: they need no account and touch nothing.
-CI (`.github/workflows/checks.yml`) runs the same, plus Gitleaks.
+CI (`.github/workflows/cicd.yml`) calls `terraform_cicd.yml` of `mairie360/CICD`: the same
+checks per root, plus Semgrep, Gitleaks and a Trivy IaC scan (accepted risks in `.trivyignore`),
+and the `prevent_destroy` check. `gdpr-pr.yml` checks the GDPR question of the PR description.

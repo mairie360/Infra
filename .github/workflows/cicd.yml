@@ -1,0 +1,34 @@
+# CI of the Terraform code (MAIR-617): the shared terraform_cicd.yml of mairie360/CICD runs, per
+# root, fmt / validate / terraform test (providers mocked) and the security scans (Semgrep,
+# Gitleaks, Trivy IaC). Nothing here reads or changes the real infrastructure: Terraform is
+# applied by hand (scripts/tf.sh <root> apply).
+name: CI
+
+on:
+  push:
+    branches: [main]  # other branches are covered by the pull_request run
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  terraform:
+    uses: mairie360/CICD/.github/workflows/terraform_cicd.yml@mair-617-terraform-cicd
+    with:
+      cicd_version: mair-617-terraform-cicd  # must match the terraform_cicd.yml ref above
+      roots: '["bootstrap", "modules/instance", "orgs/mairie360"]'
+    secrets:
+      N8N_WEBHOOK_SECRET: ${{ secrets.N8N_WEBHOOK_SECRET }}
+
+  no-destroy:
+    # Machines and secrets are imported or protected, never recreated: every
+    # resource keeps prevent_destroy.
+    name: Every resource has prevent_destroy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Check prevent_destroy
+        run: bash tests/check_prevent_destroy.sh
