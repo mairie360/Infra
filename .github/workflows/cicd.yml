@@ -14,9 +14,9 @@ permissions:
 
 jobs:
   terraform:
-    uses: mairie360/CICD/.github/workflows/terraform_cicd.yml@mair-617-terraform-cicd
+    uses: mairie360/CICD/.github/workflows/terraform_cicd.yml@v5.6.0
     with:
-      cicd_version: mair-617-terraform-cicd  # must match the terraform_cicd.yml ref above
+      cicd_version: v5.6.0  # must match the terraform_cicd.yml ref above
       roots: '["bootstrap", "modules/instance", "orgs/mairie360"]'
     secrets:
       N8N_WEBHOOK_SECRET: ${{ secrets.N8N_WEBHOOK_SECRET }}
