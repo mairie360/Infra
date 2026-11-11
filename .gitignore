@@ -1,0 +1,14 @@
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+tfplan
+crash.log
+crash.*.log
+# Local backend of scripts/bootstrap.sh's first run, and any personal override.
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+# A module has no lock file: the roots pin the provider.
+modules/**/.terraform.lock.hcl
