@@ -1,0 +1,57 @@
+# Static checks of the Terraform code (MAIR-617): format, validation, the
+# terraform tests (provider mocked, no Scaleway account used) and no secret in
+# new commits. Nothing here reads or changes the real infrastructure.
+name: Checks
+
+on:
+  pull_request:
+  push:
+
+permissions:
+  contents: read
+
+jobs:
+  secret-scan:
+    name: Secret scan (Gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Run Gitleaks on the new commits
+        uses: mairie360/CICD/actions/security/gitleaks@v5.2.2
+
+  terraform:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        root: [bootstrap, modules/instance, orgs/mairie360]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: 1.17.1
+          terraform_wrapper: false
+      - name: Format
+        run: terraform -chdir=${{ matrix.root }} fmt -check -recursive -diff
+      - name: Init (no backend)
+        run: terraform -chdir=${{ matrix.root }} init -backend=false -input=false
+      - name: Validate
+        run: terraform -chdir=${{ matrix.root }} validate
+      - name: Test
+        run: terraform -chdir=${{ matrix.root }} test
+
+  no-destroy:
+    # Machines and secrets are imported or protected, never recreated: every
+    # resource of the roots keeps prevent_destroy.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Every resource has prevent_destroy
+        run: bash tests/check_prevent_destroy.sh
