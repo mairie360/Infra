@@ -32,7 +32,10 @@ if [ -z "${AWS_ACCESS_KEY_ID:-}" ] || [ -z "${AWS_SECRET_ACCESS_KEY:-}" ]; then
   export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
 fi
 
-if [ ! -d "$repo/$root/.terraform" ] && [ "$1" != init ]; then
-  terraform -chdir="$repo/$root" init -input=false
+# Always initialise before another command: a `.terraform` folder alone says
+# nothing about the backend (the checks of the README create it with
+# -backend=false). init is idempotent and fails loudly on a backend change.
+if [ "$1" != init ]; then
+  terraform -chdir="$repo/$root" init -input=false >/dev/null
 fi
 exec terraform -chdir="$repo/$root" "$@"

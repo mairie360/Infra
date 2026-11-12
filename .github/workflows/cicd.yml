@@ -21,14 +21,17 @@ jobs:
     secrets:
       N8N_WEBHOOK_SECRET: ${{ secrets.N8N_WEBHOOK_SECRET }}
 
-  no-destroy:
+  repo-checks:
     # Machines and secrets are imported or protected, never recreated: every
-    # resource keeps prevent_destroy.
-    name: Every resource has prevent_destroy
+    # resource keeps prevent_destroy. Also tests scripts/tf.sh and
+    # scripts/bootstrap.sh with stubbed terraform and scw.
+    name: Every resource has prevent_destroy, scripts tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Check prevent_destroy
-        run: bash tests/check_prevent_destroy.sh
+        run: python3 tests/check_prevent_destroy.py
+      - name: Unit tests of the check and the scripts
+        run: python3 -m unittest discover -s tests -v

@@ -11,7 +11,7 @@ rebuilt from scratch; secrets are created here and filled by `mairie360/ansible`
 - Never run `apply` without the user's go-ahead; `plan` is fine. Use
   `scripts/tf.sh <root> <cmd>` (sets the S3 backend credentials).
 - Every resource sets `lifecycle { prevent_destroy = true }`
-  (`tests/check_prevent_destroy.sh`); secrets also set `protected = true`.
+  (`tests/check_prevent_destroy.py`, no exemption); secrets also set `protected = true`.
 - The vault secret names and the `/<org>/<env>` path are a contract with role
   `k8s_instance_secrets` of `ansible` (`vault_entries`, `vault_path`).
 - CI: `.github/workflows/cicd.yml` calls `terraform_cicd.yml` of `mairie360/CICD` pinned by

@@ -37,7 +37,7 @@ here without changing its `vault_entries`.
 
 A protected secret cannot be deleted, by the API or by Terraform, and every
 resource carries `prevent_destroy` (checked in CI by
-`tests/check_prevent_destroy.sh`).
+`tests/check_prevent_destroy.py`).
 
 ## Usage
 
@@ -46,7 +46,9 @@ key of the `mairie360` project (`ObjectStorageFullAccess`,
 `SecretManagerFullAccess`).
 
 ```bash
-# Once, ever: create the state bucket (local state first, then moved into it)
+# Once, ever: create the state bucket (local state first, then moved into it).
+# Safe to re-run: a run stopped after the apply finishes the migration, and the
+# local state is only deleted once the bucket holds it.
 scripts/bootstrap.sh
 
 # Every change
@@ -65,7 +67,8 @@ terraform fmt -recursive -check
 for r in bootstrap modules/instance orgs/mairie360; do
   terraform -chdir=$r init -backend=false && terraform -chdir=$r validate && terraform -chdir=$r test
 done
-bash tests/check_prevent_destroy.sh
+python3 tests/check_prevent_destroy.py
+python3 -m unittest discover -s tests   # the check and scripts/*.sh, terraform and scw stubbed
 ```
 
 The tests mock the Scaleway provider: they need no account and touch nothing.

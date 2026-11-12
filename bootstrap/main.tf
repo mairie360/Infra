@@ -25,4 +25,9 @@ resource "scaleway_object_bucket_acl" "state" {
   bucket     = scaleway_object_bucket.state.id
   project_id = var.project_id
   acl        = "private"
+
+  # Removing it would leave the bucket on its provider default ACL.
+  lifecycle {
+    prevent_destroy = true
+  }
 }
