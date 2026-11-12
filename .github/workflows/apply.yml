@@ -59,7 +59,7 @@ jobs:
           set -o pipefail
           code=0
           scripts/tf.sh "$ROOT" plan -input=false -lock=false -no-color -detailed-exitcode -out=tfplan \
-            | tee plan.txt || code=$?
+            2>&1 | tee plan.txt || code=$?
           [ "$code" -eq 0 ] || [ "$code" -eq 2 ]
           echo "changes=$([ "$code" -eq 2 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
           scripts/plan-comment.sh "$ROOT" plan.txt "$code" >> "$GITHUB_STEP_SUMMARY"
