@@ -1,0 +1,73 @@
+# terraform plan of every group on each pull request (MAIR-803), posted on the PR.
+#
+# Environment `infra-plan`: SCW_ACCESS_KEY / SCW_SECRET_KEY of the IAM application
+# mairie360-ci-terraform-plan (iam/), read-only on the group's project. It reads
+# the state and the resources, never a secret value, and writes nothing. Pull
+# requests from forks get no secret: the job is then skipped.
+# bootstrap/ and iam/ are applied from a workstation only (README) and not planned here.
+name: Plan
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: plan-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  plan:
+    name: Plan ${{ matrix.root }}
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    environment: infra-plan
+    permissions:
+      contents: read
+      pull-requests: write # the plan comment
+    strategy:
+      fail-fast: false
+      matrix:
+        root: [orgs/mairie360]
+    env:
+      SCW_ACCESS_KEY: ${{ secrets.SCW_ACCESS_KEY }}
+      SCW_SECRET_KEY: ${{ secrets.SCW_SECRET_KEY }}
+      SCW_DEFAULT_PROJECT_ID: ${{ vars.SCW_DEFAULT_PROJECT_ID }}
+      SCW_DEFAULT_ORGANIZATION_ID: ${{ vars.SCW_DEFAULT_ORGANIZATION_ID }}
+      # The S3 backend speaks the AWS API with the same key (scripts/tf.sh keeps them).
+      AWS_ACCESS_KEY_ID: ${{ secrets.SCW_ACCESS_KEY }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.SCW_SECRET_KEY }}
+      TF_IN_AUTOMATION: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: 1.17.1
+          terraform_wrapper: false
+
+      - name: terraform plan
+        id: plan
+        run: |
+          set -o pipefail
+          code=0
+          scripts/tf.sh "$ROOT" plan -input=false -lock=false -no-color -detailed-exitcode \
+            | tee plan.txt || code=$?
+          # 0 = no change, 2 = changes, anything else = error.
+          echo "exitcode=$code" >> "$GITHUB_OUTPUT"
+          [ "$code" -eq 0 ] || [ "$code" -eq 2 ]
+        env:
+          ROOT: ${{ matrix.root }}
+
+      - name: Post the plan on the pull request
+        if: always() && steps.plan.outcome != 'skipped'
+        run: scripts/plan-comment.sh "$ROOT" plan.txt "$EXITCODE" > comment.md && gh pr comment "$PR" --body-file comment.md
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          ROOT: ${{ matrix.root }}
+          EXITCODE: ${{ steps.plan.outputs.exitcode }}

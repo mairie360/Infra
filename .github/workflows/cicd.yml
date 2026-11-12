@@ -1,7 +1,7 @@
 # CI of the Terraform code (MAIR-617): the shared terraform_cicd.yml of mairie360/CICD runs, per
 # root, fmt / validate / terraform test (providers mocked) and the security scans (Semgrep,
-# Gitleaks, Trivy IaC). Nothing here reads or changes the real infrastructure: Terraform is
-# applied by hand (scripts/tf.sh <root> apply).
+# Gitleaks, Trivy IaC). Nothing here reads or changes the real infrastructure: plan.yml plans
+# pull requests with a read-only key, apply.yml applies after approval (MAIR-803).
 name: CI
 
 on:
@@ -17,14 +17,14 @@ jobs:
     uses: mairie360/CICD/.github/workflows/terraform_cicd.yml@v5.6.0
     with:
       cicd_version: v5.6.0  # must match the terraform_cicd.yml ref above
-      roots: '["bootstrap", "modules/instance", "orgs/mairie360"]'
+      roots: '["bootstrap", "iam", "modules/instance", "orgs/mairie360"]'
     secrets:
       N8N_WEBHOOK_SECRET: ${{ secrets.N8N_WEBHOOK_SECRET }}
 
   repo-checks:
     # Machines and secrets are imported or protected, never recreated: every
-    # resource keeps prevent_destroy. Also tests scripts/tf.sh and
-    # scripts/bootstrap.sh with stubbed terraform and scw.
+    # resource keeps prevent_destroy. Also tests scripts/*.sh with stubbed
+    # terraform and scw, and the guards of plan.yml / apply.yml (MAIR-803).
     name: Every resource has prevent_destroy, scripts tests
     runs-on: ubuntu-latest
     steps:
@@ -33,5 +33,7 @@ jobs:
           persist-credentials: false
       - name: Check prevent_destroy
         run: python3 tests/check_prevent_destroy.py
+      - name: Install PyYAML (workflow tests)
+        run: python3 -m pip install --user pyyaml==6.0.3
       - name: Unit tests of the check and the scripts
         run: python3 -m unittest discover -s tests -v
