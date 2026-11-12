@@ -64,6 +64,11 @@ class Workflows(unittest.TestCase):
         self.assertIn("head.repo.full_name == github.repository", job["if"])
         self.assertNotIn("apply", steps_text(job))
 
+    def test_plan_errors_reach_the_comment_and_the_summary(self):
+        # Infra#4: a plan that failed before terraform ran (no key) posted an empty comment.
+        for name, job in (("plan.yml", "plan"), ("apply.yml", "plan")):
+            self.assertRegex(steps_text(load(name)["jobs"][job]), r"2>&1 \| tee plan\.txt", name)
+
     def test_checkouts_do_not_keep_the_token(self):
         for path in WORKFLOWS.glob("*.yml"):
             for name, job in load(path.name).get("jobs", {}).items():
