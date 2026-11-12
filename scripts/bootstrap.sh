@@ -8,9 +8,10 @@
 # bucket and the local copy deleted, only once the bucket holds it.
 #
 # Every run picks up where the previous one stopped:
-#   - no bucket                        -> local apply, then migration;
-#   - bucket + local state left behind -> migration only (a run stopped after
-#                                         the apply);
+#   - no bucket, or a local state left -> local apply, then migration. A run
+#     behind (a stopped run)              stopped after creating the bucket may
+#                                         lack the rest (the ACL): the apply
+#                                         against the local state finishes it;
 #   - bucket, no local state           -> plan of bootstrap/ against its own state.
 set -euo pipefail
 
@@ -34,17 +35,16 @@ migrate() {
   echo "bootstrap/ state is now in s3://$bucket/bootstrap.tfstate."
 }
 
-if scw object bucket get "$bucket" region=fr-par >/dev/null 2>&1; then
-  if [ -s "$local_state" ]; then
-    echo "$bucket exists and bootstrap/ still has a local state: finishing the migration."
-    migrate
-    exit 0
-  fi
+if [ ! -s "$local_state" ] && scw object bucket get "$bucket" region=fr-par >/dev/null 2>&1; then
   echo "$bucket exists: planning bootstrap/ against its own state."
   exec "$tf" bootstrap plan
 fi
+if [ -s "$local_state" ]; then
+  echo "bootstrap/ still has a local state: applying what a stopped run left, then migrating."
+fi
 
-# The override only lives for the local apply; the migration removes it.
+# The override only lives for the local apply (removed even when it fails);
+# the migration removes it too.
 trap 'rm -f "$override"' EXIT
 cat > "$override" <<'HCL'
 terraform {

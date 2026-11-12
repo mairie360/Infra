@@ -6,8 +6,11 @@ Machines, buckets and secrets are imported or protected, never recreated
 change this check, in review.
 
 The check reads the HCL itself (standard library only): comments and string
-contents are ignored, and the setting only counts when it is an attribute of a
-`lifecycle` block directly inside the resource, set to the literal `true`.
+contents are ignored (template expressions `${...}` / `%{...}` included, with
+the strings nested in them), and the setting only counts when it is an
+attribute of a `lifecycle` block directly inside the resource, set to the
+literal `true`. It fails closed: a file whose braces do not balance, or where
+a `resource` header is not read as a block, is reported, never skipped.
 
     python3 tests/check_prevent_destroy.py [file.tf ...]   # default: every tracked *.tf
 """
@@ -17,8 +20,51 @@ import subprocess
 import sys
 from pathlib import Path
 
-HEREDOC = re.compile(r"<<-?([A-Za-z_]\w*)")
+# Heredoc delimiters are identifiers, which may contain hyphens.
+HEREDOC = re.compile(r"<<-?([A-Za-z_][\w-]*)")
 PROTECTED = re.compile(r"^\s*prevent_destroy\s*=\s*true\s*$", re.M)
+
+
+def skip_string(text, i):
+    """Index just past the quoted string starting at text[i] == '"'.
+
+    Template expressions (`${...}`, `%{...}`, not the escapes `$${` / `%%{`)
+    are expressions: their braces and nested strings are skipped as a whole.
+    """
+    n = len(text)
+    i += 1
+    while i < n:
+        c = text[i]
+        if c == "\\":
+            i += 2
+        elif c == '"':
+            return i + 1
+        elif text.startswith("$${", i) or text.startswith("%%{", i):
+            i += 3
+        elif text.startswith("${", i) or text.startswith("%{", i):
+            i = skip_template(text, i + 2)
+        else:
+            i += 1
+    return n
+
+
+def skip_template(text, i):
+    """Index just past the `}` closing a template expression whose body starts at i."""
+    n = len(text)
+    depth = 1
+    while i < n:
+        c = text[i]
+        if c == '"':
+            i = skip_string(text, i)
+            continue
+        if c == "{":
+            depth += 1
+        elif c == "}":
+            depth -= 1
+            if depth == 0:
+                return i + 1
+        i += 1
+    return n
 
 
 def strip_comments_and_strings(text):
@@ -39,15 +85,9 @@ def strip_comments_and_strings(text):
             out.append("\n" * text.count("\n", i, end))
             i = end
         elif c == '"':
-            out.append('""')
-            i += 1
-            while i < n and text[i] != '"':
-                if text[i] == "\\":
-                    i += 1
-                elif text[i] == "\n":
-                    out.append("\n")
-                i += 1
-            i += 1
+            end = skip_string(text, i)
+            out.append('""' + "\n" * text.count("\n", i, end))
+            i = end
         elif HEREDOC.match(text, i):
             tag = HEREDOC.match(text, i).group(1)
             line_end = text.find("\n", i)
@@ -60,6 +100,16 @@ def strip_comments_and_strings(text):
             out.append(c)
             i += 1
     return "".join(out)
+
+
+def balanced(text):
+    """The braces of `text` (comments and strings removed) all match."""
+    depth = 0
+    for c in text:
+        depth += {"{": 1, "}": -1}.get(c, 0)
+        if depth < 0:
+            return False
+    return depth == 0
 
 
 def blocks(text, start=0, end=None):
@@ -100,11 +150,15 @@ def lifecycle_protects(clean, start, end):
 def unprotected(text):
     """[(line, "type.name")] of the resources of `text` without the protection."""
     clean = strip_comments_and_strings(text)
+    if not balanced(clean):
+        return [(0, "(unbalanced braces once comments and strings are removed: cannot check this file)")]
     original_lines = text.split("\n")
     problems = []
+    found = 0
     for header, b0, b1, line in blocks(clean):
         if not header.startswith("resource"):
             continue
+        found += 1
         # Labels are blanked with the strings: read them from the original line.
         names = re.findall(r'"([^"]*)"', original_lines[line - 1])
         label = ".".join(names[:2]) or header
@@ -114,6 +168,10 @@ def unprotected(text):
         )
         if not ok:
             problems.append((line, label))
+    # Every `resource` header left after cleaning must have been read as a block.
+    headers = len(re.findall(r"^\s*resource\b", clean, re.M))
+    if headers != found:
+        problems.append((0, f"({headers} resource headers, {found} resource blocks read: cannot check this file)"))
     return problems
 
 
@@ -134,7 +192,10 @@ def main(argv):
     status = 0
     for f in sorted(files):
         for line, label in unprotected(f.read_text()):
-            print(f"{f}:{line}: resource {label} has no lifecycle {{ prevent_destroy = true }}")
+            if line == 0:
+                print(f"{f}: {label}")
+            else:
+                print(f"{f}:{line}: resource {label} has no lifecycle {{ prevent_destroy = true }}")
             status = 1
     print(f"{len(files)} file(s) checked, {'problems found' if status else 'every resource protected'}.")
     return status

@@ -57,6 +57,34 @@ class PreventDestroy(unittest.TestCase):
         )
         self.assertEqual(labels(text), ["a.two"])
 
+    def test_hyphenated_heredoc_delimiter_does_not_hide_resources(self):
+        # CodeRabbit on Infra#2: `<<EOT-END` used to be read as `<<EOT`, and the
+        # search for a closing `EOT` swallowed the rest of the file.
+        text = (
+            'resource "scaleway_secret" "example" {\n  name = "example"\n'
+            '  description = <<EOT-END\nexample\nEOT-END\n}\n'
+            'resource "a" "after" {\n}\n'
+        )
+        self.assertEqual(labels(text), ["scaleway_secret.example", "a.after"])
+
+    def test_strings_inside_template_expressions_do_not_hide_resources(self):
+        # CodeRabbit on Infra#2: the `"` of `"${"{"}"` ended the outer string,
+        # and the `{` left behind made the resource unreadable.
+        text = 'resource "scaleway_secret" "example" {\n  name = "example"\n  description = "${"{"}"\n}\n'
+        self.assertEqual(labels(text), ["scaleway_secret.example"])
+        text = 'resource "a" "b" {\n  d = "%{ if true }${"}"}%{ endif }"\n  lifecycle {\n    prevent_destroy = true\n  }\n}\n'
+        self.assertEqual(labels(text), [])
+
+    def test_escaped_template_markers_are_plain_text(self):
+        text = 'resource "a" "b" {\n  d = "$${x} %%{y}"\n  lifecycle {\n    prevent_destroy = true\n  }\n}\n'
+        self.assertEqual(labels(text), [])
+
+    def test_unreadable_file_fails_closed(self):
+        # Whatever else desynchronises the reader, the file is reported, not passed.
+        problems = check.unprotected('resource "a" "b" {\n  x = {\n}\n')
+        self.assertEqual([line for line, _ in problems], [0])
+        self.assertIn("cannot check", problems[0][1])
+
     def test_only_resources_are_checked(self):
         self.assertEqual(labels('data "a" "b" {\n}\nmodule "m" {\n  source = "./x"\n}\n'), [])
 

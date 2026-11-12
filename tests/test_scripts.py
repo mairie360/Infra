@@ -21,7 +21,8 @@ FAKE_TERRAFORM = textwrap.dedent("""\
     override=no; [ -e "$chdir/backend_override.tf" ] && override=yes
     echo "$(basename "$chdir") $* override=$override aws=${AWS_ACCESS_KEY_ID:-}" >> "$CALLS"
     case "$1" in
-      apply) echo '{"resources":[1]}' > "$chdir/terraform.tfstate" ;;
+      apply) [ "${FAKE_APPLY_FAIL:-}" = yes ] && exit 1
+             echo '{"resources":[1]}' > "$chdir/terraform.tfstate" ;;
       state) printf '%s' "${FAKE_STATE_LIST:-}" ;;
     esac
     exit 0
@@ -102,18 +103,31 @@ class Scripts(unittest.TestCase):
         self.assertFalse((self.work / "bootstrap/terraform.tfstate").exists())
         self.assertFalse((self.work / "bootstrap/backend_override.tf").exists())
 
-    def test_interrupted_run_resumes_the_migration(self):
+    def test_interrupted_run_applies_locally_then_migrates(self):
         # CodeRabbit on Infra#2: a run stopped after the apply left a local
-        # state that the next run never moved into the bucket.
+        # state that the next run never moved into the bucket; and a run
+        # stopped after the bucket but before its ACL must create the ACL
+        # (local apply) before migrating, not only migrate.
         (self.work / "bootstrap/terraform.tfstate").write_text('{"resources":[1]}')
         result = self.run_script(
             self.work / "scripts/bootstrap.sh", FAKE_BUCKET="yes", FAKE_STATE_LIST="scaleway_object_bucket.state"
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         calls = self.terraform_calls()
-        self.assertFalse(any(" apply" in c or c.endswith(" plan") for c in calls), calls)
-        self.assertTrue(any("-migrate-state" in c for c in calls))
+        self.assertFalse(any(c.startswith("bootstrap plan") for c in calls), calls)
+        apply = next(c for c in calls if c.startswith("bootstrap apply"))
+        self.assertIn("override=yes", apply, "the resumed apply uses the local state")
+        migrate = next(c for c in calls if "-migrate-state" in c)
+        self.assertLess(calls.index(apply), calls.index(migrate))
         self.assertFalse((self.work / "bootstrap/terraform.tfstate").exists())
+
+    def test_failed_apply_keeps_the_local_state_and_removes_the_override(self):
+        (self.work / "bootstrap/terraform.tfstate").write_text('{"resources":[1]}')
+        result = self.run_script(self.work / "scripts/bootstrap.sh", FAKE_BUCKET="yes", FAKE_APPLY_FAIL="yes")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse(any("-migrate-state" in c for c in self.terraform_calls()))
+        self.assertTrue((self.work / "bootstrap/terraform.tfstate").exists())
+        self.assertFalse((self.work / "bootstrap/backend_override.tf").exists())
 
     def test_local_state_is_kept_when_the_bucket_state_is_empty(self):
         (self.work / "bootstrap/terraform.tfstate").write_text('{"resources":[1]}')

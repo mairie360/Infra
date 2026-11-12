@@ -47,7 +47,8 @@ key of the `mairie360` project (`ObjectStorageFullAccess`,
 
 ```bash
 # Once, ever: create the state bucket (local state first, then moved into it).
-# Safe to re-run: a run stopped after the apply finishes the migration, and the
+# Safe to re-run: while a local state is left, the run applies against it (what
+# a stopped run did not create yet, e.g. the bucket ACL), then migrates; the
 # local state is only deleted once the bucket holds it.
 scripts/bootstrap.sh
 
