@@ -12,3 +12,4 @@ crash.*.log
 terraform.rc
 # A module has no lock file: the roots pin the provider.
 modules/**/.terraform.lock.hcl
+__pycache__/
