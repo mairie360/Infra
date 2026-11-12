@@ -1,0 +1,106 @@
+# terraform apply of one group (MAIR-803), started by hand from `main` only.
+#
+#   1. `plan` (environment infra-plan, read-only key) saves the plan and shows it in the
+#      job summary;
+#   2. `apply` (environment infra-apply: required reviewers, deployment branch `main`)
+#      waits for a reviewer who has read that plan, then applies exactly that plan.
+# Key of infra-apply: IAM application mairie360-ci-terraform-apply (iam/), which can
+# write the state and create/update secrets, never delete nor touch IAM. There is no
+# state lock: the concurrency group keeps one apply at a time.
+name: Apply
+
+on:
+  workflow_dispatch:
+    inputs:
+      root:
+        description: Terraform root to apply
+        type: choice
+        options: [orgs/mairie360]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: infra-apply
+  cancel-in-progress: false
+
+env:
+  ROOT: ${{ inputs.root }}
+  TF_IN_AUTOMATION: "1"
+
+jobs:
+  plan:
+    name: Plan ${{ inputs.root }}
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: infra-plan
+    env:
+      SCW_ACCESS_KEY: ${{ secrets.SCW_ACCESS_KEY }}
+      SCW_SECRET_KEY: ${{ secrets.SCW_SECRET_KEY }}
+      SCW_DEFAULT_PROJECT_ID: ${{ vars.SCW_DEFAULT_PROJECT_ID }}
+      SCW_DEFAULT_ORGANIZATION_ID: ${{ vars.SCW_DEFAULT_ORGANIZATION_ID }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.SCW_ACCESS_KEY }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.SCW_SECRET_KEY }}
+    outputs:
+      changes: ${{ steps.plan.outputs.changes }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: 1.17.1
+          terraform_wrapper: false
+
+      - name: terraform plan
+        id: plan
+        run: |
+          set -o pipefail
+          code=0
+          scripts/tf.sh "$ROOT" plan -input=false -lock=false -no-color -detailed-exitcode -out=tfplan \
+            | tee plan.txt || code=$?
+          [ "$code" -eq 0 ] || [ "$code" -eq 2 ]
+          echo "changes=$([ "$code" -eq 2 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          scripts/plan-comment.sh "$ROOT" plan.txt "$code" >> "$GITHUB_STEP_SUMMARY"
+
+      # The plan holds no secret value (the secrets are created without versions).
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: steps.plan.outputs.changes == 'true'
+        with:
+          name: tfplan
+          path: ${{ inputs.root }}/tfplan
+          retention-days: 1
+          if-no-files-found: error
+
+  apply:
+    name: Apply ${{ inputs.root }}
+    needs: plan
+    if: github.ref == 'refs/heads/main' && needs.plan.outputs.changes == 'true'
+    runs-on: ubuntu-latest
+    environment: infra-apply
+    env:
+      SCW_ACCESS_KEY: ${{ secrets.SCW_ACCESS_KEY }}
+      SCW_SECRET_KEY: ${{ secrets.SCW_SECRET_KEY }}
+      SCW_DEFAULT_PROJECT_ID: ${{ vars.SCW_DEFAULT_PROJECT_ID }}
+      SCW_DEFAULT_ORGANIZATION_ID: ${{ vars.SCW_DEFAULT_ORGANIZATION_ID }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.SCW_ACCESS_KEY }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.SCW_SECRET_KEY }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: 1.17.1
+          terraform_wrapper: false
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: tfplan
+          path: ${{ inputs.root }}
+
+      # A saved plan refuses to apply when the state moved since it was made.
+      - name: terraform apply of the reviewed plan
+        run: scripts/tf.sh "$ROOT" apply -input=false -lock=false -no-color tfplan
