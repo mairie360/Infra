@@ -22,3 +22,8 @@ output "backup_bucket" {
   description = "Name of the locked backup bucket (backup.s3.bucket of the Deploiment values)."
   value       = scaleway_object_bucket.backup.name
 }
+
+output "elearning_bucket" {
+  description = "Name of the e-learning bucket (S3_BUCKET of elearning-api)."
+  value       = scaleway_object_bucket.elearning.name
+}

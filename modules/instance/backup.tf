@@ -11,7 +11,7 @@
 # lifecycle rule once their lock has expired.
 
 locals {
-  backup_bucket = "${var.org_id}-backups-${var.env_name}"
+  backup_bucket = module.naming.buckets.backup
 }
 
 resource "scaleway_object_bucket" "backup" {

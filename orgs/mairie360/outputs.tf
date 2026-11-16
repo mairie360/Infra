@@ -5,6 +5,7 @@ output "instances" {
       vault_path       = instance.vault_path
       vault_secret_ids = instance.vault_secret_ids
       backup_bucket    = instance.backup_bucket
+      elearning_bucket = instance.elearning_bucket
     }
   }
 }
