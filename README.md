@@ -17,7 +17,7 @@ here and applied.
 ```
 bootstrap/            state bucket mairie360-tfstate (versioned, private)
 iam/                  IAM applications of the CI (MAIR-803), applied from a workstation only
-modules/instance/     resources of one instance: its vault secrets, its machine
+modules/instance/     resources of one instance: its vault secrets, its machine, its locked backup bucket
 modules/machine/      one machine: server + routed IPv4 + routed IPv6
 orgs/mairie360/       group mairie360: instances dev, staging, prod, Argo CD machine
 scripts/tf.sh         terraform in one root, S3 backend credentials from the scw profile
@@ -55,6 +55,30 @@ scripts/tf.sh orgs/mairie360 output -json ansible_hosts > /tmp/hosts.json
 # in mairie360/ansible:
 scripts/inventory-from-terraform.py --org mairie360 /tmp/hosts.json
 ```
+
+## Backup buckets (MAIR-618)
+
+Each instance gets `<org>-backups-<env>`, the restic repository of the backup
+CronJob (`backup.s3.bucket` in Deploiment). Versioned, private, and **locked in
+COMPLIANCE mode for 30 days** (`backup_lock_days`): no version written in the
+last 30 days can be deleted or overwritten, by the instance key, a CI key or the
+organization owner. `restic forget --prune` still works: on a versioned bucket a
+delete only adds a delete marker (restic >= 0.13 sends the Content-MD5 that
+object lock requires). A lifecycle rule purges non-current versions after 31
+days, once their lock is over. Object lock can only be set when a bucket is
+created: the hand-made `mairie360-backup-<env>` buckets are not converted.
+
+Rollout, per env (dev first):
+
+1. Apply: the bucket is created empty.
+2. Deploiment points `backup.s3.bucket` at it; the next CronJob run (or
+   `kubectl create job --from=cronjob/<release>-backup`) runs `restic init`
+   there with the same `RESTIC_PASSWORD` and takes a first snapshot.
+3. After 30 days of backups in the new bucket, empty and delete the old
+   `mairie360-backup-<env>` bucket (not managed here, it holds no locked data).
+
+The COMPLIANCE lock cannot be shortened nor removed, even by Scaleway support:
+a wrong `backup_lock_days` costs storage for that many days.
 
 ## Vault of the instance secrets (MAIR-617)
 
