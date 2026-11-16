@@ -16,7 +16,8 @@ rebuilt from scratch; secrets are created here and filled by `mairie360/ansible`
   committed `.terraform.lock.hcl`, several platforms), not in modules.
 - Never run `apply` (local or the Apply workflow) without the user's go-ahead; `plan` is fine.
   Use `scripts/tf.sh <root> <cmd>` (sets the S3 backend credentials).
-- CI keys stay least-privilege (`iam/tests/`): no IAM, no `*Delete`, no `*FullAccess`, the plan
+- CI keys stay least-privilege (`iam/tests/`): no IAM, no `*Delete`, no `*FullAccess` (one exception: `ObservabilityFullAccess` on the apply key,
+  Cockpit has no finer write set, MAIR-620), the plan
   key read-only; a new resource type in `orgs/` may need a new permission set in `iam/`.
 - Every resource sets `lifecycle { prevent_destroy = true }`
   (`tests/check_prevent_destroy.py`, no exemption); secrets also set `protected = true`.
