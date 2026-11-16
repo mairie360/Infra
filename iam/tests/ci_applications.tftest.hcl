@@ -88,3 +88,29 @@ run "refuses_a_project_that_is_not_a_uuid" {
 
   expect_failures = [var.project_id]
 }
+
+# MAIR-637: the apply key manages machines but can never delete one.
+run "apply_key_manages_machines_without_delete" {
+  command = apply
+
+  assert {
+    condition = alltrue([
+      for s in ["InstancesServerWrite", "InstancesServerCreate", "InstancesIpWrite"] :
+      contains(one(scaleway_iam_policy.ci["ci-terraform-apply"].rule).permission_set_names, s)
+    ])
+    error_message = "The apply key creates and updates machines and their IPs."
+  }
+
+  assert {
+    condition = alltrue([
+      for s in one(scaleway_iam_policy.ci["ci-terraform-apply"].rule).permission_set_names :
+      !startswith(s, "Instances") || !can(regex("(Delete|Snapshot|Image(Create|Write)|SerialConsole)", s))
+    ])
+    error_message = "No machine, IP or volume deletion, snapshot, image change or console access for the CI."
+  }
+
+  assert {
+    condition     = contains(one(scaleway_iam_policy.ci["ci-terraform-plan"].rule).permission_set_names, "InstancesReadOnly")
+    error_message = "The plan key reads the machines it plans."
+  }
+}

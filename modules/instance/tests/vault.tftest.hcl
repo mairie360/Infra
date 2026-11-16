@@ -12,6 +12,7 @@ variables {
   org_id     = "mairie360"
   env_name   = "dev"
   project_id = "00000000-0000-0000-0000-000000000000"
+  machine    = { type = "POP2-2C-8G", root_volume_size_gb = 30 }
 }
 
 run "three_protected_secrets_under_org_env" {
@@ -51,4 +52,13 @@ run "refuses_a_path_the_role_would_not_build" {
   }
 
   expect_failures = [var.env_name]
+}
+
+run "machine_named_after_org_and_env" {
+  command = apply
+
+  assert {
+    condition     = module.machine.server_id != "" && output.machine.public_ipv4 != null
+    error_message = "The instance outputs its machine."
+  }
 }

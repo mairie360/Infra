@@ -1,1 +1,18 @@
 project_id = "716a44bd-7d6f-4940-87ca-711e62799cd0"
+
+instances = {
+  dev     = { machine = { type = "POP2-2C-8G", root_volume_size_gb = 30 } }
+  staging = { machine = { type = "POP2-2C-8G", root_volume_size_gb = 30 } }
+  prod    = { machine = { type = "POP2-2C-8G", root_volume_size_gb = 30 } }
+}
+
+# Existing console name kept: a rename is harmless but not the point of the import.
+argocd_machine = { name = "argocd hub", type = "DEV1-M", root_volume_size_gb = 20 }
+
+# MAIR-637: machines made in the console, adopted on the first apply.
+imported_machines = {
+  argocd  = { server_id = "99b5d1eb-d99f-4419-a5a4-4f30ca62672f", ipv4_id = "340961fd-aeee-4a0a-9d6e-e1c517803a75", ipv6_id = "65928d58-2b09-44a5-9708-cd16b832c604" }
+  dev     = { server_id = "c325d057-6eb3-490d-9b6e-1f87b5ed6b16", ipv4_id = "ca804b30-bc5d-4373-ac79-21008b7b891a", ipv6_id = "297d8394-263a-4474-a289-7d44d3c3bc3b" }
+  staging = { server_id = "4d5bd565-a36d-4167-9439-aa845f6205ae", ipv4_id = "9540ab87-0d79-438c-9b97-98f5dbd64eb8", ipv6_id = "656bbe9a-eb43-48db-a32a-0137195510c1" }
+  prod    = { server_id = "db2e6eae-3b69-4ef2-89fe-cdd090a8aa49", ipv4_id = "ffbebd24-b805-4a77-ae4b-2746fd355511", ipv6_id = "df461dfb-e807-4d2d-a383-b43de7e07f5b" }
+}

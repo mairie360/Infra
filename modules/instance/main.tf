@@ -40,3 +40,15 @@ resource "scaleway_secret" "vault" {
     prevent_destroy = true
   }
 }
+
+# The machine of the instance (MAIR-637): imported when it already exists
+# (orgs/<org>/imports.tf), created otherwise.
+module "machine" {
+  source = "../machine"
+
+  name                = coalesce(var.machine.name, "${var.org_id}-${var.env_name}")
+  type                = var.machine.type
+  root_volume_size_gb = var.machine.root_volume_size_gb
+  project_id          = var.project_id
+  tags                = [var.org_id, var.env_name]
+}

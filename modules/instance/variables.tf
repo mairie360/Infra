@@ -28,3 +28,12 @@ variable "region" {
   type        = string
   default     = "fr-par"
 }
+
+variable "machine" {
+  description = "Machine of the instance (MAIR-637). name defaults to <org_id>-<env_name>."
+  type = object({
+    type                = string
+    root_volume_size_gb = number
+    name                = optional(string)
+  })
+}

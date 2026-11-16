@@ -7,7 +7,9 @@
 # Every rule is limited to the group's project and to what the workflow does:
 #   ci-terraform-plan   read the state and the resources (pull request plans);
 #   ci-terraform-apply  write the state, create and update secrets (no delete:
-#                       the secrets are protected anyway);
+#                       the secrets are protected anyway), create and update
+#                       machines and their IPs (MAIR-637; no delete, no
+#                       snapshot or image);
 #   ci-ansible          role k8s_instance_secrets: find the secrets, read,
 #                       add and disable versions (no delete).
 
@@ -15,7 +17,7 @@ locals {
   ci_applications = {
     ci-terraform-plan = {
       description     = "terraform plan of mairie360/Infra pull requests: read-only."
-      permission_sets = ["ObjectStorageReadOnly", "SecretManagerReadOnly"]
+      permission_sets = ["ObjectStorageReadOnly", "SecretManagerReadOnly", "InstancesReadOnly"]
     }
     ci-terraform-apply = {
       description = "terraform apply of mairie360/Infra (approved workflow on main)."
@@ -26,6 +28,20 @@ locals {
         "SecretManagerReadOnly",
         "SecretManagerSecretCreate",
         "SecretManagerSecretWrite",
+        # MAIR-637: machines of modules/machine (imported, then managed).
+        "InstancesServerRead",
+        "InstancesServerList",
+        "InstancesServerCreate",
+        "InstancesServerWrite",
+        "InstancesIpRead",
+        "InstancesIpCreate",
+        "InstancesIpWrite",
+        "InstancesVolumeRead",
+        "InstancesVolumeList",
+        "InstancesVolumeCreate",
+        "InstancesImageRead",
+        "InstancesSecurityGroupRead",
+        "InstancesSecurityGroupList",
       ]
     }
     ci-ansible = {

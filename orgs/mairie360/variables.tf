@@ -1,10 +1,46 @@
+variable "org_id" {
+  description = "Group id (org_id of the Ansible inventory, prefix of the vault paths)."
+  type        = string
+  default     = "mairie360"
+}
+
 variable "project_id" {
   description = "Scaleway project of the mairie360 group."
   type        = string
 }
 
-variable "envs" {
-  description = "Instances of the group (env_name of the Ansible inventory)."
-  type        = set(string)
-  default     = ["dev", "staging", "prod"]
+variable "instances" {
+  description = "Instances of the group (key = env_name of the Ansible inventory) and their machine."
+  type = map(object({
+    machine = object({
+      type                = string
+      root_volume_size_gb = number
+      name                = optional(string)
+    })
+  }))
+}
+
+variable "argocd_machine" {
+  description = "Machine holding the group's Argo CD (Ansible group <org>_argocd)."
+  type = object({
+    name                = string
+    type                = string
+    root_volume_size_gb = number
+  })
+}
+
+variable "imported_machines" {
+  description = "Machines made before Terraform, by key (an instance env or \"argocd\"): ids to import (MAIR-637)."
+  type = map(object({
+    server_id = string
+    ipv4_id   = string
+    ipv6_id   = string
+    zone      = optional(string, "fr-par-1")
+  }))
+  default = {}
+
+  validation {
+    condition     = alltrue([for k in keys(var.imported_machines) : k == "argocd" || contains(keys(var.instances), k)])
+    error_message = "imported_machines keys are \"argocd\" or an env of var.instances."
+  }
 }

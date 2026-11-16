@@ -8,3 +8,12 @@ output "vault_secret_ids" {
   # The provider's id is <region>/<uuid>; the API takes the uuid.
   value = { for name, secret in scaleway_secret.vault : name => element(split("/", secret.id), length(split("/", secret.id)) - 1) }
 }
+
+output "machine" {
+  description = "Server id and public addresses of the instance's machine."
+  value = {
+    server_id   = module.machine.server_id
+    public_ipv4 = module.machine.public_ipv4
+    public_ipv6 = module.machine.public_ipv6
+  }
+}

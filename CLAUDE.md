@@ -5,6 +5,8 @@ Terraform for the Scaleway resources of Mairie 360 (`mairie360/Infra`, epic MAIR
 blocks, `prevent_destroy`, image changes ignored), never recreated; buckets are
 rebuilt from scratch; secrets are created here and filled by `mairie360/ansible`.
 
+- Machines (`modules/machine`, MAIR-637) are adopted through `imported_machines` +
+  `orgs/<org>/imports.tf`; check every plan touching them shows no replacement.
 - Roots: `bootstrap/` (state bucket) and `iam/` (CI applications), both applied from a
   workstation only; `orgs/<org>/` (one per group), planned on PRs and applied by
   `.github/workflows/apply.yml` after approval (MAIR-803). Modules
