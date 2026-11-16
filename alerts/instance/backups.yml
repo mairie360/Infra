@@ -1,0 +1,25 @@
+# MAIR-622: pushed to every instance's metrics source (<org>-<env>-metrics) by
+# scripts/push-alert-rules.sh (__ENV__ = the env); e-mailed through the alert
+# manager (MAIR-623). After every successful run, the backup CronJob of the
+# instance (Deploiment charts/backup) pushes the time of that success to the
+# instance's collector: mairie360_backup_last_success_timestamp_seconds.
+# The CronJob runs daily (03:00): no success for 26 h means last night's
+# backup failed or never ran, and so does no value at all for 27 h.
+name: backups-__ENV__
+interval: 5m
+rules:
+  - alert: BackupMissed
+    expr: >-
+      (time() - max(max_over_time({__name__=~"mairie360_backup_last_success_timestamp_seconds"}[27h])) > 93600)
+      or
+      absent_over_time({__name__=~"mairie360_backup_last_success_timestamp_seconds"}[27h])
+    labels:
+      severity: critical
+      env: __ENV__
+    annotations:
+      summary: "No successful backup of __ENV__ for more than 26 h"
+      description: >-
+        The backup CronJob of __ENV__ reported no success since the previous
+        night: check its last Job (kubectl -n mairie360-__ENV__ get jobs),
+        the bucket key and the restic repository (Deploiment
+        charts/backup/README.md).
