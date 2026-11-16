@@ -1,0 +1,45 @@
+# MAIR-621: pushed to the group's probes data source (<org>-probes) by
+# scripts/push-alert-rules.sh; e-mailed through the alert manager (MAIR-623).
+# Metrics of the httpcheck receiver of the probe on the Argo CD machine
+# (mairie360/ansible role hub_probe). OTLP names may get a unit suffix in
+# Cockpit, hence the __name__ regexes.
+name: external-probe
+interval: 1m
+rules:
+  - alert: SiteDown
+    expr: >-
+      max by (http_url) (
+        max_over_time({__name__=~"httpcheck_status(_ratio)?", http_status_class="2xx"}[2m])
+      ) < 1
+    for: 5m
+    labels:
+      severity: critical
+    annotations:
+      summary: "{{ $labels.http_url }} does not answer 2xx"
+      description: >-
+        The external probe on the Argo CD machine gets no 2xx from
+        {{ $labels.http_url }} for 5 minutes.
+
+  - alert: SiteUnreachable
+    expr: >-
+      max by (http_url) (
+        max_over_time({__name__=~"httpcheck_error(_total)?"}[2m])
+      ) > 0
+    for: 5m
+    labels:
+      severity: critical
+    annotations:
+      summary: "{{ $labels.http_url }} unreachable"
+      description: >-
+        The external probe cannot connect to {{ $labels.http_url }} (DNS,
+        TLS or TCP error) for 5 minutes.
+
+  - alert: ProbeSilent
+    expr: absent_over_time({__name__=~"httpcheck_duration(_milliseconds)?"}[15m])
+    labels:
+      severity: critical
+    annotations:
+      summary: The external probe sends nothing
+      description: >-
+        No result from the probe on the Argo CD machine for 15 minutes: the
+        machine, its k3s or the probe is down, so the sites are not watched.

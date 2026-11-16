@@ -16,6 +16,10 @@ on:
         description: Terraform root to apply
         type: choice
         options: [orgs/mairie360]
+      alert_rules:
+        description: Push the alert rules of alerts/ after the apply (MAIR-621), even without Terraform change
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -77,7 +81,7 @@ jobs:
   apply:
     name: Apply ${{ inputs.root }}
     needs: plan
-    if: github.ref == 'refs/heads/main' && needs.plan.outputs.changes == 'true'
+    if: github.ref == 'refs/heads/main' && (needs.plan.outputs.changes == 'true' || inputs.alert_rules)
     runs-on: ubuntu-latest
     environment: infra-apply
     env:
@@ -98,10 +102,18 @@ jobs:
           terraform_wrapper: false
 
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        if: needs.plan.outputs.changes == 'true'
         with:
           name: tfplan
           path: ${{ inputs.root }}
 
       # A saved plan refuses to apply when the state moved since it was made.
       - name: terraform apply of the reviewed plan
+        if: needs.plan.outputs.changes == 'true'
         run: scripts/tf.sh "$ROOT" apply -input=false -lock=false -no-color tfplan
+
+      # MAIR-621/622: the Cockpit rulers take the rules of alerts/ (the reviewer
+      # approved them with the run). Needs the outputs of the applied state.
+      - name: Push the alert rules
+        if: inputs.alert_rules
+        run: scripts/push-alert-rules.sh "${ROOT#orgs/}"

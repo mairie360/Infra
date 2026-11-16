@@ -66,6 +66,14 @@ class IssueCockpitTokens(unittest.TestCase):
         self.assertIn("STDIN cockpit-secret\n", calls, "the raw token, as COCKPIT_TOKEN expects")
         self.assertNotIn("cockpit-secret", result.stdout + result.stderr)
 
+    def test_hub_probe_gets_a_metrics_only_token(self):
+        """MAIR-621: the external probe on the Argo CD machine only pushes metrics."""
+        result = self.run_script("mairie360")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        calls = self.calls.read_text()
+        self.assertIn("name=mairie360-hub-collector token-scopes.0=write_only_metrics -o json", calls)
+        self.assertIn("secret-id=sec:/mairie360/hub disable-previous=true", calls)
+
     def test_existing_token_is_kept_without_rotate(self):
         result = self.run_script("mairie360", "prod", FAKE_ENABLED="/mairie360/prod")
         self.assertEqual(result.returncode, 0, result.stderr)
