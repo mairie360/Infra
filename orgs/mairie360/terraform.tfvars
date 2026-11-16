@@ -16,3 +16,8 @@ imported_machines = {
   staging = { server_id = "4d5bd565-a36d-4167-9439-aa845f6205ae", ipv4_id = "9540ab87-0d79-438c-9b97-98f5dbd64eb8", ipv6_id = "656bbe9a-eb43-48db-a32a-0137195510c1" }
   prod    = { server_id = "db2e6eae-3b69-4ef2-89fe-cdd090a8aa49", ipv4_id = "ffbebd24-b805-4a77-ae4b-2746fd355511", ipv6_id = "df461dfb-e807-4d2d-a383-b43de7e07f5b" }
 }
+
+# MAIR-623: alerts go by e-mail to the team mailbox (Cockpit alert manager,
+# enabled in the console before this repository, adopted).
+alert_emails         = ["mairie360@gmail.com"]
+import_alert_manager = true

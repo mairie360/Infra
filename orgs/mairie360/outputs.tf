@@ -34,3 +34,8 @@ output "ansible_hosts" {
     },
   )
 }
+
+output "alert_manager_url" {
+  description = "Cockpit alert manager of the group (MAIR-623)."
+  value       = scaleway_cockpit_alert_manager.this.alert_manager_url
+}
