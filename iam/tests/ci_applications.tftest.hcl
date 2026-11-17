@@ -144,3 +144,17 @@ run "only_the_apply_key_gets_cockpit_full_access" {
     error_message = "Only the approved apply manages Cockpit."
   }
 }
+
+# Scaleway IAM only accepts tags matching ^[a-zA-Z0-9._\-/=+@ ]+$ (no ":", unlike the Secret Manager
+# ones): the first real apply failed on "managed-by:terraform".
+run "iam_tags_follow_the_scaleway_iam_pattern" {
+  command = apply
+
+  assert {
+    condition = alltrue(flatten([
+      for r in concat(values(scaleway_iam_application.ci), values(scaleway_iam_policy.ci), values(scaleway_iam_application.bucket), values(scaleway_iam_policy.bucket)) :
+      [for t in r.tags : can(regex("^[a-zA-Z0-9._/=+@ -]+$", t))]
+    ]))
+    error_message = "An IAM tag only holds letters, digits and . _ - / = + @ and spaces."
+  }
+}

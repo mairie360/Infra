@@ -81,7 +81,7 @@ resource "scaleway_iam_application" "bucket" {
 
   name        = "${each.value.name}-s3"
   description = "S3 key of ${each.value.name} only (bucket policy). Key in the vault: ${each.value.secret}."
-  tags        = [var.org_id, "bucket-key", "managed-by:terraform"]
+  tags        = [var.org_id, "bucket-key", "managed-by=terraform"]
 
   lifecycle {
     prevent_destroy = true
@@ -94,7 +94,7 @@ resource "scaleway_iam_policy" "bucket" {
   name           = "${each.value.name}-s3"
   description    = "Object rights of ${each.value.name}-s3; the bucket policies limit them to ${each.value.name}."
   application_id = scaleway_iam_application.bucket[each.key].id
-  tags           = [var.org_id, "bucket-key", "managed-by:terraform"]
+  tags           = [var.org_id, "bucket-key", "managed-by=terraform"]
 
   rule {
     project_ids = [var.project_id]
