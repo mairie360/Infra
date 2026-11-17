@@ -103,10 +103,13 @@ every principal it does not list. So `iam/buckets.tf` gives:
   too (CI applications only), or every bucket key could read the state. A new
   bucket in the project needs its policy there.
 
-The organization owner keeps access to every bucket and can always edit a
-policy. Anyone else who runs Terraform with a personal key must be in
-`operator_user_ids` (`scw iam user list`) before `iam/` is applied, or loses the
-state bucket.
+A bucket policy applies to everyone it does not list, **the organization owner
+included** (the first `iam apply` locked its own state bucket). Anyone who runs
+Terraform with a personal key must be in `operator_user_ids`
+(`scw iam user list`, `iam/terraform.tfvars`) before `iam/` is applied. The
+owner can still read and edit a bucket's policy with their key, which is the
+way back from a lockout: add an `operators` statement, then `terraform state
+push errored.tfstate` if an apply could not save its state.
 
 Keys are never typed, printed nor stored in the state: once per bucket,
 
