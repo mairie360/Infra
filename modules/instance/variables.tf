@@ -37,3 +37,14 @@ variable "machine" {
     name                = optional(string)
   })
 }
+
+variable "backup_lock_days" {
+  description = "COMPLIANCE object lock of every backup version, in days (MAIR-618). Can be raised, never lowered by anyone before the versions expire."
+  type        = number
+  default     = 30
+
+  validation {
+    condition     = var.backup_lock_days >= 30
+    error_message = "Backups stay locked at least 30 days (agreed for MAIR-618)."
+  }
+}

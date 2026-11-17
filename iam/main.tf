@@ -9,7 +9,8 @@
 #   ci-terraform-apply  write the state, create and update secrets (no delete:
 #                       the secrets are protected anyway), create and update
 #                       machines and their IPs (MAIR-637; no delete, no
-#                       snapshot or image);
+#                       snapshot or image), create and configure buckets
+#                       (MAIR-618; no bucket or object delete);
 #   ci-ansible          role k8s_instance_secrets: find the secrets, read,
 #                       add and disable versions (no delete).
 
@@ -23,6 +24,9 @@ locals {
       description = "terraform apply of mairie360/Infra (approved workflow on main)."
       permission_sets = [
         "ObjectStorageBucketsRead",
+        # MAIR-618: create the backup buckets, their versioning and lifecycle
+        # (the object lock configuration is under ObjectStorageObjectsWrite).
+        "ObjectStorageBucketsWrite",
         "ObjectStorageObjectsRead",
         "ObjectStorageObjectsWrite",
         "SecretManagerReadOnly",

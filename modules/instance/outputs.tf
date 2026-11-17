@@ -17,3 +17,8 @@ output "machine" {
     public_ipv6 = module.machine.public_ipv6
   }
 }
+
+output "backup_bucket" {
+  description = "Name of the locked backup bucket (backup.s3.bucket of the Deploiment values)."
+  value       = scaleway_object_bucket.backup.name
+}

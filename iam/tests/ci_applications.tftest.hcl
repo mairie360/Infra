@@ -114,3 +114,18 @@ run "apply_key_manages_machines_without_delete" {
     error_message = "The plan key reads the machines it plans."
   }
 }
+
+# MAIR-618: the apply key creates the locked backup buckets, never deletes one.
+run "apply_key_creates_buckets_without_delete" {
+  command = apply
+
+  assert {
+    condition     = contains(one(scaleway_iam_policy.ci["ci-terraform-apply"].rule).permission_set_names, "ObjectStorageBucketsWrite")
+    error_message = "The apply key creates buckets and their configuration."
+  }
+
+  assert {
+    condition     = !contains(one(scaleway_iam_policy.ci["ci-terraform-apply"].rule).permission_set_names, "ObjectStorageBucketsDelete")
+    error_message = "No CI key deletes a bucket."
+  }
+}
