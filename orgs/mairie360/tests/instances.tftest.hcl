@@ -1,8 +1,25 @@
-# Group mairie360 has the vault of its three instances. Provider mocked.
+# Group mairie360: vault and machine of its three instances, and its Argo CD
+# machine. Provider mocked; a mocked provider cannot import, so the runs drop
+# imported_machines (the import list itself is checked by tests/test_imports.py).
+variables {
+  imported_machines = {}
+}
+
 mock_provider "scaleway" {
   mock_resource "scaleway_secret" {
     defaults = {
       id = "fr-par/11111111-1111-1111-1111-111111111111"
+    }
+  }
+  mock_resource "scaleway_instance_ip" {
+    defaults = {
+      id      = "fr-par-1/33333333-3333-3333-3333-333333333333"
+      address = "192.0.2.10"
+    }
+  }
+  mock_resource "scaleway_instance_server" {
+    defaults = {
+      id = "fr-par-1/44444444-4444-4444-4444-444444444444"
     }
   }
 }
@@ -24,4 +41,36 @@ run "vault_of_dev_staging_prod" {
     condition     = length(output.instances["staging"].vault_secret_ids) == 5
     error_message = "Each instance has its five vault secrets."
   }
+}
+
+# MAIR-637: what scripts/inventory-from-terraform.py of mairie360/ansible reads.
+run "ansible_hosts_match_the_inventory_names" {
+  command = apply
+
+  assert {
+    condition     = toset(keys(output.ansible_hosts)) == toset(["mairie360-argocd", "mairie360-dev", "mairie360-staging", "mairie360-prod"])
+    error_message = "Host names are those of the Ansible inventory: <org>-argocd and <org>-<env>."
+  }
+
+  assert {
+    condition     = output.ansible_hosts["mairie360-argocd"].group == "mairie360_argocd" && output.ansible_hosts["mairie360-prod"].group == "mairie360_instances"
+    error_message = "Groups are <org>_argocd and <org>_instances."
+  }
+
+  assert {
+    condition     = output.ansible_hosts["mairie360-staging"].env_name == "staging" && output.ansible_hosts["mairie360-dev"].public_ipv4 == "192.0.2.10"
+    error_message = "Each instance host carries its env_name and its public IPv4."
+  }
+}
+
+run "refuses_an_import_for_an_unknown_env" {
+  command = plan
+
+  variables {
+    imported_machines = {
+      preprod = { server_id = "x", ipv4_id = "y", ipv6_id = "z" }
+    }
+  }
+
+  expect_failures = [var.imported_machines]
 }

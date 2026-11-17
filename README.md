@@ -5,7 +5,7 @@ infrastructure repositories:
 
 | Repository | Owns |
 | --- | --- |
-| `Infra` (this one) | Scaleway resources: Secret Manager vault, state bucket, then machines, buckets, keys (epic MAIR-613) |
+| `Infra` (this one) | Scaleway resources: Secret Manager vault, state bucket, machines, then buckets, keys (epic MAIR-613) |
 | [`ansible`](https://github.com/mairie360/ansible) | what runs on the machines (k3s, WireGuard, Argo CD), and the values written into the vault |
 | [`Deploiment`](https://github.com/mairie360/Deploiment) | what runs in Kubernetes (Argo CD + Helm chart) |
 
@@ -17,8 +17,9 @@ here and applied.
 ```
 bootstrap/            state bucket mairie360-tfstate (versioned, private)
 iam/                  IAM applications of the CI (MAIR-803), applied from a workstation only
-modules/instance/     resources of one instance: its vault secrets
-orgs/mairie360/       group mairie360: instances dev, staging, prod
+modules/instance/     resources of one instance: its vault secrets, its machine
+modules/machine/      one machine: server + routed IPv4 + routed IPv6
+orgs/mairie360/       group mairie360: instances dev, staging, prod, Argo CD machine
 scripts/tf.sh         terraform in one root, S3 backend credentials from the scw profile
 scripts/bootstrap.sh  first creation of the state bucket
 scripts/plan-comment.sh  plan output as markdown (PR comment, job summary)
@@ -27,6 +28,33 @@ tests/                repository checks run by CI
 
 A client group is a copy of `orgs/mairie360/` as `orgs/<org>/` (own Scaleway
 project in `terraform.tfvars`, own state key in `backend.tf`, its `envs`).
+
+## Machines (MAIR-637)
+
+`modules/machine` holds one Scaleway Instance with its routed IPv4 and IPv6. The
+machines made in the console before this repository (`argocd hub`,
+`mairie360-{dev,staging,prod}`) are **imported, never recreated**: their ids are
+in `imported_machines` of `orgs/mairie360/terraform.tfvars`, read by the import
+blocks of `orgs/mairie360/imports.tf` (a no-op once they are in the state, so
+they stay). `prevent_destroy` on every resource, the image is ignored after
+creation (the OS is upgraded in place by `mairie360/ansible`), a type change
+resizes in place, and the CI refuses a plan that destroys anything. A client
+group without `imported_machines` gets new machines (Ubuntu 26.04).
+
+The first apply adopts the four machines and only adds the missing `org`/`env`
+tags of dev and prod; check that its plan shows `0 to destroy` and no server
+replacement.
+
+The output `ansible_hosts` (`<org>-argocd`, `<org>-<env>` => Ansible group,
+`env_name`, public IPv4) is what `mairie360/ansible` builds its gitignored
+`inventory/hosts.yml` from (`scripts/inventory-from-terraform.py`), so public
+addresses are never typed nor committed:
+
+```bash
+scripts/tf.sh orgs/mairie360 output -json ansible_hosts > /tmp/hosts.json
+# in mairie360/ansible:
+scripts/inventory-from-terraform.py --org mairie360 /tmp/hosts.json
+```
 
 ## Vault of the instance secrets (MAIR-617)
 
