@@ -54,6 +54,15 @@ def skip_template(text, i):
     depth = 1
     while i < n:
         c = text[i]
+        # HCL allows comments inside a template expression: a quote or a brace in one is text.
+        if c == "#" or text.startswith("//", i):
+            while i < n and text[i] != "\n":
+                i += 1
+            continue
+        if text.startswith("/*", i):
+            end = text.find("*/", i + 2)
+            i = n if end < 0 else end + 2
+            continue
         if c == '"':
             i = skip_string(text, i)
             continue

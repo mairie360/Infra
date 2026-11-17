@@ -113,6 +113,7 @@ terraform fmt -recursive -check
 for r in bootstrap modules/instance orgs/mairie360; do
   terraform -chdir=$r init -backend=false && terraform -chdir=$r validate && terraform -chdir=$r test
 done
+python3 -m pip install --user pyyaml==6.0.3   # for tests/test_workflows.py, the version CI installs
 python3 tests/check_prevent_destroy.py
 python3 -m unittest discover -s tests   # the check and scripts/*.sh, terraform and scw stubbed
 ```

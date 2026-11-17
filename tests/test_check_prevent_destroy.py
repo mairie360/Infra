@@ -79,6 +79,28 @@ class PreventDestroy(unittest.TestCase):
         text = 'resource "a" "b" {\n  d = "$${x} %%{y}"\n  lifecycle {\n    prevent_destroy = true\n  }\n}\n'
         self.assertEqual(labels(text), [])
 
+    def test_comment_quote_inside_a_template_does_not_hide_a_resource(self):
+        # CodeRabbit on Infra#4: a quote in a comment of a template expression used to open a string.
+        text = (
+            'resource "terraform_data" "protected" {\n'
+            "  lifecycle { prevent_destroy = true }\n"
+            '  input = "${ /* " */ 1 }"\n'
+            "}\n"
+            'resource "terraform_data" "unprotected" {\n'
+            '  # "\n'
+            "}\n"
+        )
+        self.assertEqual(labels(text), ["terraform_data.unprotected"])
+        line_comment = (
+            'resource "terraform_data" "protected" {\n'
+            "  lifecycle { prevent_destroy = true }\n"
+            '  input = "${ 1 # " \n}"\n'
+            "}\n"
+            'resource "terraform_data" "unprotected" {\n'
+            "}\n"
+        )
+        self.assertEqual(labels(line_comment), ["terraform_data.unprotected"])
+
     def test_unreadable_file_fails_closed(self):
         # Whatever else desynchronises the reader, the file is reported, not passed.
         problems = check.unprotected('resource "a" "b" {\n  x = {\n}\n')
