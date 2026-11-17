@@ -60,3 +60,18 @@ run "refuses_a_shorter_lock" {
 
   expect_failures = [var.backup_lock_days]
 }
+
+# MAIR-619: the e-learning bucket of the instance, rebuilt under the right name.
+run "elearning_bucket_private_and_versioned" {
+  command = apply
+
+  assert {
+    condition     = output.elearning_bucket == "mairie360-elearning-prod" && scaleway_object_bucket.elearning.versioning[0].enabled
+    error_message = "Each instance has its own versioned <org>-elearning-<env> bucket."
+  }
+
+  assert {
+    condition     = scaleway_object_bucket_acl.elearning.acl == "private"
+    error_message = "Attachments are only served through presigned URLs."
+  }
+}

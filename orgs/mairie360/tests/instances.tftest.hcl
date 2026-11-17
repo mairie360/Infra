@@ -38,8 +38,8 @@ run "vault_of_dev_staging_prod" {
   }
 
   assert {
-    condition     = length(output.instances["staging"].vault_secret_ids) == 5
-    error_message = "Each instance has its five vault secrets."
+    condition     = length(output.instances["staging"].vault_secret_ids) == 7
+    error_message = "Each instance has its seven vault secrets."
   }
 }
 

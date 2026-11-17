@@ -7,8 +7,15 @@
 # mairie360/ansible adds the versions, finds the secrets by path and name, and
 # stops when one is missing. Keep the names in sync with its vault_entries.
 
+module "naming" {
+  source = "../naming"
+
+  org_id   = var.org_id
+  env_name = var.env_name
+}
+
 locals {
-  vault_path = "/${var.org_id}/${var.env_name}"
+  vault_path = module.naming.vault_path
 
   vault_secrets = {
     restic-password = "RESTIC_PASSWORD of the backup bucket. Lost: every backup is unreadable."
@@ -19,6 +26,11 @@ locals {
     # then read by the CI runs.
     resend-api-key = "Resend API key of the instance (SMTP_PASSWORD of core-api and Keycloak)."
     cockpit-token  = "Scaleway Cockpit token of the instance (COCKPIT_TOKEN of the OpenTelemetry collector)."
+    # MAIR-619: the key of each bucket, limited to it (iam/ application and
+    # bucket policy). JSON {"access_key", "secret_key"}, written by
+    # scripts/issue-bucket-keys.sh, never typed.
+    backup-s3-key    = "S3 key of the backup bucket only (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY of the backup CronJob), JSON access_key + secret_key."
+    elearning-s3-key = "S3 key of the e-learning bucket only (S3_ACCESS_KEY / S3_SECRET_KEY of elearning-api), JSON access_key + secret_key."
   }
 }
 

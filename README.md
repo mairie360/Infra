@@ -16,13 +16,15 @@ here and applied.
 
 ```
 bootstrap/            state bucket mairie360-tfstate (versioned, private)
-iam/                  IAM applications of the CI (MAIR-803), applied from a workstation only
+iam/                  IAM applications of the CI (MAIR-803) and of each bucket, bucket policies (MAIR-619), applied from a workstation only
 modules/instance/     resources of one instance: its vault secrets, its machine, its locked backup bucket
 modules/machine/      one machine: server + routed IPv4 + routed IPv6
+modules/naming/       bucket and vault names shared by orgs/ and iam/
 orgs/mairie360/       group mairie360: instances dev, staging, prod, Argo CD machine
 scripts/tf.sh         terraform in one root, S3 backend credentials from the scw profile
 scripts/bootstrap.sh  first creation of the state bucket
 scripts/plan-comment.sh  plan output as markdown (PR comment, job summary)
+scripts/issue-bucket-keys.sh  one S3 key per bucket, straight into the vault
 tests/                repository checks run by CI
 ```
 
@@ -80,12 +82,51 @@ Rollout, per env (dev first):
 The COMPLIANCE lock cannot be shortened nor removed, even by Scaleway support:
 a wrong `backup_lock_days` costs storage for that many days.
 
+## Bucket keys (MAIR-619)
+
+Each instance bucket (`<org>-backups-<env>`, `<org>-elearning-<env>`, the
+latter rebuilt from scratch: the shared hand-made `mairie360-eleartning-storage`
+is dropped) has **its own IAM application and key**, and only reaches that
+bucket. Scaleway lets a request through when the principal's IAM policy AND,
+if there is one, the bucket policy allow it, and a bucket with a policy refuses
+every principal it does not list. So `iam/buckets.tf` gives:
+
+- each bucket application object rights on the project (IAM cannot name a
+  bucket: `ObjectStorageObjects{Read,Write,Delete}`, `ObjectStorageBucketsRead`);
+- **every bucket of the project a bucket policy**: its own application for its
+  objects (`ListBucket`, `Get/Put/DeleteObject`, never `DeleteObjectVersion`),
+  the CI plan / apply applications for the bucket configuration only (no
+  object), the `operator_user_ids` for everything. The state bucket gets one
+  too (CI applications only), or every bucket key could read the state. A new
+  bucket in the project needs its policy there.
+
+The organization owner keeps access to every bucket and can always edit a
+policy. Anyone else who runs Terraform with a personal key must be in
+`operator_user_ids` (`scw iam user list`) before `iam/` is applied, or loses the
+state bucket.
+
+Keys are never typed, printed nor stored in the state: once per bucket,
+
+```bash
+scripts/tf.sh orgs/mairie360 apply   # or the Apply workflow: buckets + vault secrets
+scripts/tf.sh iam apply              # applications + bucket policies
+scripts/issue-bucket-keys.sh         # one key per application -> /<org>/<env>/<purpose>-s3-key
+```
+
+then the ansible role `k8s_instance_secrets` reads `backup-s3-key` and
+`elearning-s3-key` from the vault and seals them (playbooks/secrets.yml). Once
+every instance runs on its new keys, delete the old hand-made keys with
+project-wide rights (`scw iam api-key list`). Rotation:
+`scripts/issue-bucket-keys.sh --rotate <env>/<purpose>`, reseal, then delete the
+previous key it prints.
+
 ## Vault of the instance secrets (MAIR-617)
 
-`modules/instance` creates five **protected** Secret Manager secrets per
+`modules/instance` creates seven **protected** Secret Manager secrets per
 instance under `/<org>/<env>`: `restic-password`, `admin-password`,
-`sealing-keys`, and the external values the CI reads (MAIR-803):
-`resend-api-key`, `cockpit-token`. Terraform creates the secrets only, never a value: role
+`sealing-keys`, the external values the CI reads (MAIR-803):
+`resend-api-key`, `cockpit-token`, and the bucket keys (MAIR-619):
+`backup-s3-key`, `elearning-s3-key`. Terraform creates the secrets only, never a value: role
 `k8s_instance_secrets` of `ansible` finds them by path and name, adds the
 versions and reads them back, and stops when one is missing. Rename nothing
 here without changing its `vault_entries`.
