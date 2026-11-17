@@ -18,8 +18,8 @@ run "three_protected_secrets_under_org_env" {
   command = apply
 
   assert {
-    condition     = toset(keys(scaleway_secret.vault)) == toset(["restic-password", "admin-password", "sealing-keys"])
-    error_message = "The role expects exactly restic-password, admin-password and sealing-keys."
+    condition     = toset(keys(scaleway_secret.vault)) == toset(["restic-password", "admin-password", "sealing-keys", "resend-api-key", "cockpit-token"])
+    error_message = "The role expects exactly restic-password, admin-password, sealing-keys, resend-api-key and cockpit-token."
   }
 
   assert {
