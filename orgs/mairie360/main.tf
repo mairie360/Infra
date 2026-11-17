@@ -22,3 +22,18 @@ module "argocd" {
   project_id          = var.project_id
   tags                = [var.org_id, "argocd"]
 }
+
+# The machine running n8n, made in the console before this repository and adopted
+# (imports.tf). Same module as the others: prevent_destroy, no rebuild on a new image.
+# It is not an Ansible host (no k3s, no WireGuard), so it is left out of the
+# ansible_hosts output.
+module "n8n" {
+  source = "../../modules/machine"
+  count  = var.n8n_machine == null ? 0 : 1
+
+  name                = var.n8n_machine.name
+  type                = var.n8n_machine.type
+  root_volume_size_gb = var.n8n_machine.root_volume_size_gb
+  project_id          = var.project_id
+  tags                = ["n8n"]
+}

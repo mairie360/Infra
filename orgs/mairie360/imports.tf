@@ -5,24 +5,24 @@
 # Ids: scw instance server get <id>, scw instance ip list (not secret).
 
 locals {
-  # "argocd" or an instance env => the module holding its machine.
+  # "argocd", "n8n" or an instance env => the module holding its machine.
   imported = var.imported_machines
 }
 
 import {
-  for_each = { for k, m in local.imported : k => m if k != "argocd" }
+  for_each = { for k, m in local.imported : k => m if k != "argocd" && k != "n8n" }
   to       = module.instance[each.key].module.machine.scaleway_instance_server.this
   id       = "${each.value.zone}/${each.value.server_id}"
 }
 
 import {
-  for_each = { for k, m in local.imported : k => m if k != "argocd" }
+  for_each = { for k, m in local.imported : k => m if k != "argocd" && k != "n8n" }
   to       = module.instance[each.key].module.machine.scaleway_instance_ip.v4
   id       = "${each.value.zone}/${each.value.ipv4_id}"
 }
 
 import {
-  for_each = { for k, m in local.imported : k => m if k != "argocd" }
+  for_each = { for k, m in local.imported : k => m if k != "argocd" && k != "n8n" }
   to       = module.instance[each.key].module.machine.scaleway_instance_ip.v6
   id       = "${each.value.zone}/${each.value.ipv6_id}"
 }
@@ -42,5 +42,23 @@ import {
 import {
   for_each = { for k, m in local.imported : k => m if k == "argocd" }
   to       = module.argocd.scaleway_instance_ip.v6
+  id       = "${each.value.zone}/${each.value.ipv6_id}"
+}
+
+import {
+  for_each = { for k, m in local.imported : k => m if k == "n8n" }
+  to       = module.n8n[0].scaleway_instance_server.this
+  id       = "${each.value.zone}/${each.value.server_id}"
+}
+
+import {
+  for_each = { for k, m in local.imported : k => m if k == "n8n" }
+  to       = module.n8n[0].scaleway_instance_ip.v4
+  id       = "${each.value.zone}/${each.value.ipv4_id}"
+}
+
+import {
+  for_each = { for k, m in local.imported : k => m if k == "n8n" }
+  to       = module.n8n[0].scaleway_instance_ip.v6
   id       = "${each.value.zone}/${each.value.ipv6_id}"
 }
