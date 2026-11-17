@@ -25,7 +25,9 @@ scripts/tf.sh         terraform in one root, S3 backend credentials from the scw
 scripts/bootstrap.sh  first creation of the state bucket
 scripts/plan-comment.sh  plan output as markdown (PR comment, job summary)
 scripts/issue-bucket-keys.sh  one S3 key per bucket, straight into the vault
-scripts/issue-cockpit-tokens.sh  one push-only Cockpit token per instance, straight into the vault
+scripts/issue-cockpit-tokens.sh  one push-only Cockpit token per instance (and the hub probe), straight into the vault
+scripts/push-alert-rules.sh   alert rules of alerts/ to the Cockpit rulers (Apply workflow)
+alerts/               alert rules, one rule group per file
 tests/                repository checks run by CI
 ```
 
@@ -150,6 +152,22 @@ person's). Cockpit only sends e-mail; managed (preconfigured) alerts stay off,
 the group's rules are its own (`alerts/`, MAIR-621 / MAIR-622). mairie360's alert
 manager was enabled in the console before this repository and is adopted
 (`import_alert_manager = true`); a new client project leaves it false.
+
+## External probe (MAIR-621)
+
+The platform is watched **from outside the instances**: an OpenTelemetry
+Collector on the group's Argo CD machine (role `hub_probe` of
+`mairie360/ansible`) checks every instance's public URLs each minute and pushes
+the results to the group's Cockpit source `<org>-probes` (`orgs/<org>/probes.tf`).
+Its push-only token lives in `/<org>/hub/cockpit-token`
+(`scripts/issue-cockpit-tokens.sh <org> hub`).
+
+The rules (`alerts/group/probes.yml`): `SiteDown` (no 2xx for 5 min),
+`SiteUnreachable` (DNS/TLS/TCP error for 5 min), `ProbeSilent` (no result for
+15 min: the machine or the probe is down). They are pushed to the Cockpit ruler
+by `scripts/push-alert-rules.sh <org>`, run by the Apply workflow after the
+apply (input `alert_rules`, default on, also without Terraform change), and
+e-mailed by the alert manager (MAIR-623). See `alerts/README.md`.
 
 ## Vault of the instance secrets (MAIR-617)
 

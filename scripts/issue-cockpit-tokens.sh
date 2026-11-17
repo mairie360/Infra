@@ -14,6 +14,11 @@
 # that already has an enabled version is skipped unless --rotate; after a
 # rotation, reseal, sync, then delete the previous token with the printed
 # command.
+#
+# Env "hub" (MAIR-621) is the external probe on the group's Argo CD machine:
+# /<org>/hub/cockpit-token, token <org>-hub-collector limited to
+# write_only_metrics, read by ansible role hub_probe. It is included when no env
+# is given.
 set -euo pipefail
 
 rotate=no
@@ -39,6 +44,7 @@ tfvars="$repo/orgs/$org/terraform.tfvars"
 project_id=$(sed -n 's/^project_id *= *"\(.*\)"/\1/p' "$tfvars")
 if [ $# -eq 0 ]; then
   mapfile -t envs < <("$repo/scripts/tf.sh" "orgs/$org" output -json instances | jq -r 'keys[]')
+  envs+=(hub)
 else
   envs=("$@")
 fi
@@ -57,8 +63,9 @@ for env in "${envs[@]}"; do
     continue
   fi
   old=$(scw cockpit token list region="$region" project-id="$project_id" -o json | jq -r --arg n "$name" '.[] | select(.name == $n) | .id')
-  created=$(scw cockpit token create region="$region" project-id="$project_id" name="$name" \
-    token-scopes.0=write_only_metrics token-scopes.1=write_only_traces -o json)
+  scopes=(token-scopes.0=write_only_metrics token-scopes.1=write_only_traces)
+  [ "$env" = hub ] && scopes=(token-scopes.0=write_only_metrics)
+  created=$(scw cockpit token create region="$region" project-id="$project_id" name="$name" "${scopes[@]}" -o json)
   jq -j '.secret_key' <<<"$created" \
     | scw secret version create region="$region" secret-id="$secret_id" disable-previous=true \
         description="cockpit token $(jq -r .id <<<"$created")" data=@/dev/stdin -o json >/dev/null

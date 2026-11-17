@@ -43,6 +43,19 @@ class Workflows(unittest.TestCase):
         for name in ("plan", "apply"):
             self.assertIn("github.ref == 'refs/heads/main'", wf["jobs"][name]["if"], name)
 
+    def test_alert_rules_are_pushed_by_the_approved_apply_only(self):
+        """MAIR-621: rules need the apply key (Cockpit full access), so the approved job."""
+        wf = load("apply.yml")
+        job = wf["jobs"]["apply"]
+        self.assertIn("inputs.alert_rules", job["if"])
+        self.assertIn("scripts/push-alert-rules.sh", steps_text(job))
+        apply_step = next(s for s in job["steps"] if "apply -input=false" in str(s.get("run", "")))
+        self.assertEqual(apply_step["if"], "needs.plan.outputs.changes == 'true'",
+                         "without a Terraform change, only the rules are pushed")
+        for name, other in wf["jobs"].items():
+            if name != "apply":
+                self.assertNotIn("push-alert-rules", steps_text(other), name)
+
     def test_apply_applies_the_plan_the_reviewer_saw(self):
         jobs = load("apply.yml")["jobs"]
         self.assertEqual(jobs["plan"]["environment"], "infra-plan")

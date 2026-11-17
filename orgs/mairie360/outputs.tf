@@ -8,6 +8,8 @@ output "instances" {
       elearning_bucket = instance.elearning_bucket
       # MAIR-620: paste into observability.cockpit of the Deploiment values.
       cockpit_endpoints = instance.cockpit_endpoints
+      # MAIR-622: ruler of the instance's alert rules (alerts/instance/).
+      cockpit_metrics_url = instance.cockpit_metrics_url
     }
   }
 }
@@ -38,4 +40,13 @@ output "ansible_hosts" {
 output "alert_manager_url" {
   description = "Cockpit alert manager of the group (MAIR-623)."
   value       = scaleway_cockpit_alert_manager.this.alert_manager_url
+}
+
+output "probes" {
+  description = "External probe of the group (MAIR-621): push endpoint for role hub_probe, ruler URL, vault path of its token."
+  value = {
+    metrics_endpoint = "${trimsuffix(scaleway_cockpit_source.probes.push_url, "/")}/otlp/v1/metrics"
+    metrics_url      = scaleway_cockpit_source.probes.url
+    vault_path       = scaleway_secret.hub_cockpit_token.path
+  }
 }
