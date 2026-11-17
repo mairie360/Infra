@@ -50,8 +50,8 @@ variable "imported_machines" {
   default = {}
 
   validation {
-    condition     = alltrue([for k in keys(var.imported_machines) : k == "argocd" || contains(keys(var.instances), k)])
-    error_message = "imported_machines keys are \"argocd\" or an env of var.instances."
+    condition     = alltrue([for k in keys(var.imported_machines) : k == "argocd" || k == "n8n" || contains(keys(var.instances), k)])
+    error_message = "imported_machines keys are \"argocd\", \"n8n\" or an env of var.instances."
   }
 }
 

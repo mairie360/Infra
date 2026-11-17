@@ -76,6 +76,17 @@ run "refuses_an_import_for_an_unknown_env" {
   expect_failures = [var.imported_machines]
 }
 
+# MAIR-1075: the n8n machine is imported under its own key, which is not an env.
+run "accepts_the_n8n_import_key" {
+  command = plan
+
+  variables {
+    imported_machines = {
+      n8n = { server_id = "x", ipv4_id = "y", ipv6_id = "z" }
+    }
+  }
+}
+
 # MAIR-623: every alert is e-mailed to the team.
 run "alerts_go_to_the_team_mailbox" {
   command = apply
