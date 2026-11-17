@@ -95,3 +95,18 @@ run "refuses_an_alert_channel_without_recipient" {
 
   expect_failures = [var.alert_emails]
 }
+
+# The n8n machine is a machine of the group, never an Ansible host.
+run "n8n_machine_is_managed_but_not_an_ansible_host" {
+  command = apply
+
+  assert {
+    condition     = output.n8n_machine != null
+    error_message = "The n8n machine is declared in terraform.tfvars."
+  }
+
+  assert {
+    condition     = !contains(keys(output.ansible_hosts), "mairie360-n8n") && length(output.ansible_hosts) == 4
+    error_message = "n8n is not a k3s machine: it must not appear in ansible_hosts (inventory-from-terraform.py compares the host lists)."
+  }
+}

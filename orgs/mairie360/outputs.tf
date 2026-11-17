@@ -50,3 +50,12 @@ output "probes" {
     vault_path       = scaleway_secret.hub_cockpit_token.path
   }
 }
+
+output "n8n_machine" {
+  description = "The n8n machine: server id and public addresses, null when the group has none. Not an Ansible host."
+  value = length(module.n8n) == 0 ? null : {
+    server_id   = module.n8n[0].server_id
+    public_ipv4 = module.n8n[0].public_ipv4
+    public_ipv6 = module.n8n[0].public_ipv6
+  }
+}

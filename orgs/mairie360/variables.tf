@@ -29,8 +29,18 @@ variable "argocd_machine" {
   })
 }
 
+variable "n8n_machine" {
+  description = "Machine running n8n. Not a k3s machine: Ansible does not manage it. null = the group has none."
+  type = object({
+    name                = string
+    type                = string
+    root_volume_size_gb = number
+  })
+  default = null
+}
+
 variable "imported_machines" {
-  description = "Machines made before Terraform, by key (an instance env or \"argocd\"): ids to import (MAIR-637)."
+  description = "Machines made before Terraform, by key (an instance env, \"argocd\" or \"n8n\"): ids to import (MAIR-637)."
   type = map(object({
     server_id = string
     ipv4_id   = string

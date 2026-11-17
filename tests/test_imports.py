@@ -40,11 +40,12 @@ def top_keys(body):
 
 
 class Imports(unittest.TestCase):
-    def test_mairie360_adopts_its_four_console_machines(self):
+    def test_mairie360_adopts_its_five_console_machines(self):
         text = (REPO / "orgs/mairie360/terraform.tfvars").read_text()
         instances = top_keys(block(text, "instances"))
         imported = block(text, "imported_machines")
-        self.assertEqual(set(top_keys(imported)), set(instances) | {"argocd"})
+        # The n8n machine is adopted too, but is not an instance.
+        self.assertEqual(set(top_keys(imported)), set(instances) | {"argocd", "n8n"})
         for line in imported.strip().splitlines():
             for field in ("server_id", "ipv4_id", "ipv6_id"):
                 self.assertRegex(line, rf'{field}\s*=\s*"{UUID}"', line)
