@@ -142,6 +142,15 @@ values, with `global.observability.enabled: true`.
 The apply key holds `ObservabilityFullAccess`: Cockpit has no permission set
 between read-only and full access. The plan key stays `ObservabilityReadOnly`.
 
+## Alert channel (MAIR-623)
+
+Every alert of a group is **e-mailed** through the Cockpit alert manager of its
+project (`orgs/<org>/alerting.tf`), to `alert_emails` (a team mailbox, never a
+person's). Cockpit only sends e-mail; managed (preconfigured) alerts stay off,
+the group's rules are its own (`alerts/`, MAIR-621 / MAIR-622). mairie360's alert
+manager was enabled in the console before this repository and is adopted
+(`import_alert_manager = true`); a new client project leaves it false.
+
 ## Vault of the instance secrets (MAIR-617)
 
 `modules/instance` creates seven **protected** Secret Manager secrets per

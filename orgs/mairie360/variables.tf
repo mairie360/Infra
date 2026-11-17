@@ -44,3 +44,19 @@ variable "imported_machines" {
     error_message = "imported_machines keys are \"argocd\" or an env of var.instances."
   }
 }
+
+variable "alert_emails" {
+  description = "Addresses every alert of the group is e-mailed to (MAIR-623). A team address, not a person's."
+  type        = list(string)
+
+  validation {
+    condition     = length(var.alert_emails) > 0 && alltrue([for e in var.alert_emails : can(regex("^[^@\\s]+@[^@\\s]+\\.[a-z]{2,}$", e))])
+    error_message = "At least one e-mail address: an alert nobody receives is no alert."
+  }
+}
+
+variable "import_alert_manager" {
+  description = "Adopt the alert manager already enabled in the console (true for mairie360; a new client project leaves it false)."
+  type        = bool
+  default     = false
+}

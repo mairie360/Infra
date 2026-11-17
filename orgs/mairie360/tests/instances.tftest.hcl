@@ -2,7 +2,8 @@
 # machine. Provider mocked; a mocked provider cannot import, so the runs drop
 # imported_machines (the import list itself is checked by tests/test_imports.py).
 variables {
-  imported_machines = {}
+  imported_machines    = {}
+  import_alert_manager = false
 }
 
 mock_provider "scaleway" {
@@ -73,4 +74,24 @@ run "refuses_an_import_for_an_unknown_env" {
   }
 
   expect_failures = [var.imported_machines]
+}
+
+# MAIR-623: every alert is e-mailed to the team.
+run "alerts_go_to_the_team_mailbox" {
+  command = apply
+
+  assert {
+    condition     = [for c in scaleway_cockpit_alert_manager.this.contact_points : c.email] == ["mairie360@gmail.com"]
+    error_message = "The alert manager e-mails the team address."
+  }
+}
+
+run "refuses_an_alert_channel_without_recipient" {
+  command = plan
+
+  variables {
+    alert_emails = []
+  }
+
+  expect_failures = [var.alert_emails]
 }
