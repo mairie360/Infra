@@ -79,6 +79,11 @@ run "bucket_policy_lists_only_its_own_key_for_objects" {
 run "state_bucket_reachable_by_the_ci_only" {
   command = apply
 
+  # terraform.tfvars lists the real operator: this run checks the policy without one.
+  variables {
+    operator_user_ids = []
+  }
+
   assert {
     condition     = scaleway_object_bucket_policy.state.bucket == "mairie360-tfstate"
     error_message = "The Terraform state bucket gets a policy too, or every bucket key could read it."
