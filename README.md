@@ -17,7 +17,7 @@ here and applied.
 ```
 bootstrap/            state bucket mairie360-tfstate (versioned, private)
 iam/                  IAM applications of the CI (MAIR-803) and of each bucket, bucket policies (MAIR-619), applied from a workstation only
-modules/instance/     resources of one instance: its vault secrets, its machine, its locked backup bucket
+modules/instance/     resources of one instance: vault secrets, machine, buckets, Cockpit data sources
 modules/machine/      one machine: server + routed IPv4 + routed IPv6
 modules/naming/       bucket and vault names shared by orgs/ and iam/
 orgs/mairie360/       group mairie360: instances dev, staging, prod, Argo CD machine
@@ -25,6 +25,7 @@ scripts/tf.sh         terraform in one root, S3 backend credentials from the scw
 scripts/bootstrap.sh  first creation of the state bucket
 scripts/plan-comment.sh  plan output as markdown (PR comment, job summary)
 scripts/issue-bucket-keys.sh  one S3 key per bucket, straight into the vault
+scripts/issue-cockpit-tokens.sh  one push-only Cockpit token per instance, straight into the vault
 tests/                repository checks run by CI
 ```
 
@@ -119,6 +120,27 @@ every instance runs on its new keys, delete the old hand-made keys with
 project-wide rights (`scw iam api-key list`). Rotation:
 `scripts/issue-bucket-keys.sh --rotate <env>/<purpose>`, reseal, then delete the
 previous key it prints.
+
+## Observability (MAIR-620)
+
+Each instance gets two Cockpit data sources, `<org>-<env>-metrics` (31 days)
+and `<org>-<env>-traces` (7 days), for its OpenTelemetry Collector
+(Deploiment `charts/observability`). The token the collector pushes with is a
+Cockpit token limited to `write_only_metrics` + `write_only_traces`, issued
+once per instance straight into `/<org>/<env>/cockpit-token` (never in the
+state); ansible seals it as `COCKPIT_TOKEN`:
+
+```bash
+scripts/tf.sh orgs/mairie360 apply                  # or the Apply workflow
+scripts/issue-cockpit-tokens.sh mairie360           # envs without a token yet
+scripts/tf.sh orgs/mairie360 output -json instances | jq '.[].cockpit_endpoints'
+```
+
+The endpoints go into `observability.cockpit` of each instance's Deploiment
+values, with `global.observability.enabled: true`.
+
+The apply key holds `ObservabilityFullAccess`: Cockpit has no permission set
+between read-only and full access. The plan key stays `ObservabilityReadOnly`.
 
 ## Vault of the instance secrets (MAIR-617)
 

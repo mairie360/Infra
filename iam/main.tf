@@ -18,7 +18,7 @@ locals {
   ci_applications = {
     ci-terraform-plan = {
       description     = "terraform plan of mairie360/Infra pull requests: read-only."
-      permission_sets = ["ObjectStorageReadOnly", "SecretManagerReadOnly", "InstancesReadOnly"]
+      permission_sets = ["ObjectStorageReadOnly", "SecretManagerReadOnly", "InstancesReadOnly", "ObservabilityReadOnly"]
     }
     ci-terraform-apply = {
       description = "terraform apply of mairie360/Infra (approved workflow on main)."
@@ -46,6 +46,9 @@ locals {
         "InstancesImageRead",
         "InstancesSecurityGroupRead",
         "InstancesSecurityGroupList",
+        # MAIR-620/623: Cockpit data sources, alert manager, alert rules.
+        # Cockpit has no finer set than read-only / full access.
+        "ObservabilityFullAccess",
       ]
     }
     ci-ansible = {

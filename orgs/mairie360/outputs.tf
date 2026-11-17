@@ -6,6 +6,8 @@ output "instances" {
       vault_secret_ids = instance.vault_secret_ids
       backup_bucket    = instance.backup_bucket
       elearning_bucket = instance.elearning_bucket
+      # MAIR-620: paste into observability.cockpit of the Deploiment values.
+      cockpit_endpoints = instance.cockpit_endpoints
     }
   }
 }

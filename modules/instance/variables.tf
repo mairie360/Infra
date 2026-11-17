@@ -48,3 +48,12 @@ variable "backup_lock_days" {
     error_message = "Backups stay locked at least 30 days (agreed for MAIR-618)."
   }
 }
+
+variable "cockpit_retention_days" {
+  description = "Retention of the instance's Cockpit data sources, in days (MAIR-620)."
+  type = object({
+    metrics = optional(number, 31)
+    traces  = optional(number, 7)
+  })
+  default = {}
+}

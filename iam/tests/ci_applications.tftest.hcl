@@ -46,7 +46,8 @@ run "no_ci_key_can_manage_iam_or_delete" {
     condition = alltrue([
       for p in scaleway_iam_policy.ci : alltrue([
         for r in p.rule : alltrue([
-          for s in r.permission_set_names : !startswith(s, "IAM") && !endswith(s, "Delete") && !endswith(s, "FullAccess")
+          # ObservabilityFullAccess: Cockpit has no write set below full access (MAIR-620).
+          for s in r.permission_set_names : !startswith(s, "IAM") && !endswith(s, "Delete") && (!endswith(s, "FullAccess") || s == "ObservabilityFullAccess")
         ])
       ])
     ])
@@ -127,5 +128,19 @@ run "apply_key_creates_buckets_without_delete" {
   assert {
     condition     = !contains(one(scaleway_iam_policy.ci["ci-terraform-apply"].rule).permission_set_names, "ObjectStorageBucketsDelete")
     error_message = "No CI key deletes a bucket."
+  }
+}
+
+# MAIR-620: Cockpit full access is the one exception, for the apply key only.
+run "only_the_apply_key_gets_cockpit_full_access" {
+  command = apply
+
+  assert {
+    condition = alltrue([
+      for k, p in scaleway_iam_policy.ci : k == "ci-terraform-apply" || alltrue([
+        for r in p.rule : !contains(r.permission_set_names, "ObservabilityFullAccess")
+      ])
+    ])
+    error_message = "Only the approved apply manages Cockpit."
   }
 }

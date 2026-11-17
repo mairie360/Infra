@@ -27,3 +27,16 @@ output "elearning_bucket" {
   description = "Name of the e-learning bucket (S3_BUCKET of elearning-api)."
   value       = scaleway_object_bucket.elearning.name
 }
+
+output "cockpit_endpoints" {
+  description = "OTLP push URLs of the instance's Cockpit data sources (observability.cockpit.* of the Deploiment values)."
+  value = {
+    metricsEndpoint = "${trimsuffix(scaleway_cockpit_source.metrics.push_url, "/")}/otlp/v1/metrics"
+    tracesEndpoint  = "${trimsuffix(scaleway_cockpit_source.traces.push_url, "/")}/otlp/v1/traces"
+  }
+}
+
+output "cockpit_metrics_url" {
+  description = "Base URL of the metrics data source (Prometheus API, ruler of the alert rules)."
+  value       = scaleway_cockpit_source.metrics.url
+}
