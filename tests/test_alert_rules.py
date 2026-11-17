@@ -48,6 +48,18 @@ class RuleFiles(unittest.TestCase):
         self.assertIn("absent_over_time", alerts["ProbeSilent"]["expr"],
                       "a dead probe must alert too, not just look like a quiet night")
 
+    def test_a_missed_or_never_reported_backup_alerts(self):
+        """MAIR-622: a failed night and a CronJob that never reports both alert."""
+        group = yaml.safe_load((REPO / "alerts/instance/backups.yml").read_text().replace("__ENV__", "prod"))
+        self.assertEqual(group["name"], "backups-prod")
+        rule = group["rules"][0]
+        self.assertEqual(rule["alert"], "BackupMissed")
+        self.assertIn("> 93600", rule["expr"], "26 h: one daily run plus margin")
+        self.assertIn("absent_over_time", rule["expr"])
+        self.assertIn("mairie360_backup_last_success_timestamp_seconds", rule["expr"],
+                      "the metric Deploiment charts/backup pushes")
+        self.assertEqual(rule["labels"]["env"], "prod")
+
 
 FAKE_TF = textwrap.dedent("""\\
     #!/usr/bin/env bash

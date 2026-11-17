@@ -169,6 +169,17 @@ by `scripts/push-alert-rules.sh <org>`, run by the Apply workflow after the
 apply (input `alert_rules`, default on, also without Terraform change), and
 e-mailed by the alert manager (MAIR-623). See `alerts/README.md`.
 
+## Backup alert (MAIR-622)
+
+After every successful run, the backup CronJob of an instance (Deploiment
+`charts/backup`) pushes `mairie360_backup_last_success_timestamp_seconds` to
+the instance's collector, hence to `<org>-<env>-metrics`.
+`alerts/instance/backups.yml` (pushed to every instance by
+`scripts/push-alert-rules.sh`) raises `BackupMissed` when the last success is
+older than 26 h, or when nothing was reported for 27 h (a CronJob that never
+runs or cannot reach the collector). It needs `global.observability.enabled`
+on the instance (MAIR-620).
+
 ## Vault of the instance secrets (MAIR-617)
 
 `modules/instance` creates seven **protected** Secret Manager secrets per
