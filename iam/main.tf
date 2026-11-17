@@ -68,7 +68,7 @@ resource "scaleway_iam_application" "ci" {
 
   name        = "mairie360-${each.key}"
   description = each.value.description
-  tags        = ["mairie360", "ci", "managed-by:terraform"]
+  tags        = ["mairie360", "ci", "managed-by=terraform"]
 
   lifecycle {
     prevent_destroy = true
@@ -81,7 +81,7 @@ resource "scaleway_iam_policy" "ci" {
   name           = "mairie360-${each.key}"
   description    = each.value.description
   application_id = scaleway_iam_application.ci[each.key].id
-  tags           = ["mairie360", "ci", "managed-by:terraform"]
+  tags           = ["mairie360", "ci", "managed-by=terraform"]
 
   rule {
     project_ids          = [var.project_id]
