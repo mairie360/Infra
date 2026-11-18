@@ -30,12 +30,36 @@ variable "region" {
 }
 
 variable "machine" {
-  description = "Machine of the instance (MAIR-637). name defaults to <org_id>-<env_name>."
+  description = <<-EOT
+    Machine of the instance. tier picks its size (see local.tiers of main.tf:
+    small, medium, large); type and root_volume_size_gb override the tier. name
+    defaults to <org_id>-<env_name>.
+  EOT
   type = object({
-    type                = string
-    root_volume_size_gb = number
+    tier                = optional(string)
+    type                = optional(string)
+    root_volume_size_gb = optional(number)
     name                = optional(string)
   })
+
+  validation {
+    condition     = var.machine.tier == null ? true : contains(["small", "medium", "large"], var.machine.tier)
+    error_message = "machine.tier is small, medium or large."
+  }
+
+  validation {
+    condition     = var.machine.tier != null || (var.machine.type != null && var.machine.root_volume_size_gb != null)
+    error_message = "machine needs a tier, or both type and root_volume_size_gb."
+  }
+}
+
+variable "public_ports" {
+  description = "Ports of the instance machine open to the Internet: the fronts (80, 443) and SSH while mairie360/ansible keeps it public (wireguard_close_public_ssh false). k3s (6443) only goes through the WireGuard tunnel."
+  type = object({
+    tcp = list(number)
+    udp = optional(list(number), [])
+  })
+  default = { tcp = [22, 80, 443] }
 }
 
 variable "backup_lock_days" {

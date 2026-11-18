@@ -40,3 +40,8 @@ output "cockpit_metrics_url" {
   description = "Base URL of the metrics data source (Prometheus API, ruler of the alert rules)."
   value       = scaleway_cockpit_source.metrics.url
 }
+
+output "machine_security_group_rules" {
+  description = "Inbound rules open on the instance machine, as <protocol>/<port>."
+  value       = module.machine.security_group_rules
+}
