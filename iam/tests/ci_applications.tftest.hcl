@@ -115,10 +115,10 @@ run "apply_key_manages_machines_without_delete" {
     error_message = "The plan key reads the machines it plans."
   }
 
-  # InstancesReadOnly does not cover the volumes: the first CI plan failed with "insufficient permissions: read volume".
+  # The machines' volumes are Block Storage ones, which InstancesReadOnly does not cover: the first CI plan failed with "insufficient permissions: read volume".
   assert {
-    condition     = alltrue([for n in ["InstancesVolumeRead", "InstancesVolumeList"] : contains(one(scaleway_iam_policy.ci["ci-terraform-plan"].rule).permission_set_names, n)])
-    error_message = "The plan key reads the volumes of the machines it plans."
+    condition     = alltrue([for k in ["ci-terraform-plan", "ci-terraform-apply"] : contains(one(scaleway_iam_policy.ci[k].rule).permission_set_names, "BlockStorageReadOnly")])
+    error_message = "The plan and apply keys read the Block Storage volumes of the machines."
   }
 }
 
