@@ -18,7 +18,7 @@ locals {
   ci_applications = {
     ci-terraform-plan = {
       description     = "terraform plan of mairie360/Infra pull requests: read-only."
-      permission_sets = ["ObjectStorageReadOnly", "SecretManagerReadOnly", "InstancesReadOnly", "InstancesVolumeRead", "InstancesVolumeList", "ObservabilityReadOnly"]
+      permission_sets = ["ObjectStorageReadOnly", "SecretManagerReadOnly", "InstancesReadOnly", "BlockStorageReadOnly", "ObservabilityReadOnly"]
     }
     ci-terraform-apply = {
       description = "terraform apply of mairie360/Infra (approved workflow on main)."
@@ -43,6 +43,9 @@ locals {
         "InstancesVolumeRead",
         "InstancesVolumeList",
         "InstancesVolumeCreate",
+        # The machines' system volumes are Block Storage volumes, read on every refresh
+        # (the first CI plan failed with "read volume").
+        "BlockStorageReadOnly",
         "InstancesImageRead",
         "InstancesSecurityGroupRead",
         "InstancesSecurityGroupList",
