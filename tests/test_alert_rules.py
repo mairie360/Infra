@@ -41,6 +41,19 @@ class RuleFiles(unittest.TestCase):
                 result = subprocess.run(["promtool", "check", "rules", f.name], capture_output=True, text=True)
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
+    def test_mair_628_rules_fire_above_their_thresholds_only(self):
+        """promtool unit tests of tests/promtool/ against the rule files."""
+        if not shutil.which("promtool"):
+            self.skipTest("promtool not installed")
+        with tempfile.TemporaryDirectory() as d:
+            for path in RULE_FILES:
+                group = yaml.safe_load(path.read_text().replace("__ENV__", "dev"))
+                (pathlib.Path(d) / f"{path.parent.name}-{path.name}").write_text(yaml.safe_dump({"groups": [group]}))
+            for test in sorted((REPO / "tests/promtool").glob("*.yml")):
+                shutil.copy(test, d)
+                result = subprocess.run(["promtool", "test", "rules", test.name], cwd=d, capture_output=True, text=True)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_the_probe_alerts_on_down_unreachable_and_silent_probe(self):
         alerts = {r["alert"]: r for r in yaml.safe_load((REPO / "alerts/group/probes.yml").read_text())["rules"]}
         self.assertEqual(set(alerts), {"SiteDown", "SiteUnreachable", "ProbeSilent"})
@@ -59,6 +72,43 @@ class RuleFiles(unittest.TestCase):
         self.assertIn("mairie360_backup_last_success_timestamp_seconds", rule["expr"],
                       "the metric Deploiment charts/backup pushes")
         self.assertEqual(rule["labels"]["env"], "prod")
+
+    def test_mair_628_instance_rules_cover_the_agreed_thresholds(self):
+        group = yaml.safe_load((REPO / "alerts/instance/platform.yml").read_text().replace("__ENV__", "prod"))
+        self.assertEqual(group["name"], "platform-prod")
+        alerts = {r["alert"]: r for r in group["rules"]}
+        self.assertEqual(set(alerts), {
+            "DiskAlmostFull", "MemoryHigh", "ContainerCrashLooping", "ContainerOOMKilled",
+            "CertificateExpiresSoon", "HighErrorRate", "PostgresConnectionsHigh", "PostgresDown",
+            "InstanceMetricsSilent"})
+        self.assertIn("> 0.8", alerts["DiskAlmostFull"]["expr"])
+        self.assertIn("> 0.9", alerts["MemoryHigh"]["expr"])
+        self.assertEqual(alerts["MemoryHigh"]["for"], "10m")
+        self.assertIn('reason="CrashLoopBackOff"', alerts["ContainerCrashLooping"]["expr"])
+        self.assertIn('reason="OOMKilled"', alerts["ContainerOOMKilled"]["expr"])
+        self.assertIn("< 14 * 86400", alerts["CertificateExpiresSoon"]["expr"])
+        self.assertIn('code=~"5.."', alerts["HighErrorRate"]["expr"])
+        self.assertIn("> 0.02", alerts["HighErrorRate"]["expr"])
+        self.assertIn("[5m]", alerts["HighErrorRate"]["expr"])
+        self.assertIn("pg_settings_max_connections", alerts["PostgresConnectionsHigh"]["expr"])
+        self.assertIn("> 0.8", alerts["PostgresConnectionsHigh"]["expr"])
+        self.assertIn("absent_over_time", alerts["InstanceMetricsSilent"]["expr"],
+                      "a dead collector must alert, or every other instance alert is blind")
+        for rule in group["rules"]:
+            self.assertEqual(rule["labels"]["env"], "prod", rule["alert"])
+
+    def test_mair_628_argocd_prod_degraded_or_out_of_sync_for_30_minutes(self):
+        alerts = {r["alert"]: r for r in yaml.safe_load((REPO / "alerts/group/argocd.yml").read_text())["rules"]}
+        for name, status in (("ArgoCDProdUnhealthy", "Degraded"), ("ArgoCDProdOutOfSync", "OutOfSync")):
+            self.assertEqual(alerts[name]["for"], "30m", name)
+            self.assertIn(status, alerts[name]["expr"], name)
+            self.assertIn('name=~"prod|.+-prod"', alerts[name]["expr"], "the prod instance and its add-ons")
+        self.assertIn("absent_over_time", alerts["ArgoCDMetricsSilent"]["expr"])
+
+    def test_mair_628_an_unreachable_instance_alerts_within_2_minutes(self):
+        alerts = {r["alert"]: r for r in yaml.safe_load((REPO / "alerts/group/probes.yml").read_text())["rules"]}
+        self.assertEqual(alerts["SiteDown"]["for"], "2m")
+        self.assertEqual(alerts["SiteUnreachable"]["for"], "2m")
 
 
 FAKE_TF = textwrap.dedent("""\\
