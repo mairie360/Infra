@@ -74,6 +74,16 @@ class RuleFiles(unittest.TestCase):
                       "the metric Deploiment charts/backup pushes")
         self.assertEqual(rule["labels"]["env"], "prod")
 
+    def test_mair_631_a_missed_or_slow_restore_test_alerts(self):
+        alerts = {r["alert"]: r for r in yaml.safe_load((REPO / "alerts/instance/backups.yml").read_text())["rules"]}
+        missed = alerts["RestoreTestMissed"]["expr"]
+        self.assertIn("mairie360_restore_test_last_success_timestamp_seconds", missed)
+        self.assertIn("> 691200", missed, "8 days: one weekly test plus margin")
+        self.assertIn("absent_over_time", missed, "a test that never reported must alert too")
+        slow = alerts["RestoreTooSlow"]["expr"]
+        self.assertIn("mairie360_restore_test_duration_seconds", slow)
+        self.assertIn("> 3600", slow, "the database restore must leave room in the 2 h RTO")
+
     def test_mair_628_instance_rules_cover_the_agreed_thresholds(self):
         group = yaml.safe_load((REPO / "alerts/instance/platform.yml").read_text().replace("__ENV__", "prod"))
         self.assertEqual(group["name"], "platform-prod")
