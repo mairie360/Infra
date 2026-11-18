@@ -1,7 +1,7 @@
 # promtool unit tests of the alert rules (run by tests/test_alert_rules.py when
 # promtool is installed): each alert fires above its threshold, not under it.
 # rule_files are written by the test runner (alerts/*/*.yml, __ENV__ = dev).
-rule_files: [instance-platform.yml, group-argocd.yml, group-probes.yml]
+rule_files: [instance-platform.yml, instance-backups.yml, group-argocd.yml, group-probes.yml]
 evaluation_interval: 1m
 tests:
   - interval: 1m
@@ -203,3 +203,18 @@ tests:
             exp_annotations:
               summary: "https://cut.example unreachable"
               description: "The external probe cannot connect to https://cut.example (DNS, TLS or TCP error) for 2 minutes. An error still in the 2-minute window does not count once the latest check answered 2xx again."
+
+  # Backups every 6 h: a run missed for more than 7 h alerts, a run 6 h ago does not.
+  - interval: 10m
+    input_series:
+      - series: 'mairie360_backup_last_success_timestamp_seconds'
+        values: '0x60'
+    alert_rule_test:
+      - { eval_time: 6h, alertname: BackupMissed, exp_alerts: [] }
+      - eval_time: 7h20m
+        alertname: BackupMissed
+        exp_alerts:
+          - exp_labels: { severity: critical, env: dev }
+            exp_annotations:
+              summary: "No successful backup of dev for more than 7 h"
+              description: "The backup CronJob of dev (every 6 h) reported no success for 7 h: check its last Job (kubectl -n mairie360-dev get jobs), the bucket key and the restic repository (Deploiment charts/backup/README.md)."

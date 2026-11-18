@@ -67,7 +67,8 @@ class RuleFiles(unittest.TestCase):
         self.assertEqual(group["name"], "backups-prod")
         rule = group["rules"][0]
         self.assertEqual(rule["alert"], "BackupMissed")
-        self.assertIn("> 93600", rule["expr"], "26 h: one daily run plus margin")
+        self.assertIn("> 25200", rule["expr"], "7 h: one run every 6 h plus margin")
+        self.assertIn("[8h]", rule["expr"])
         self.assertIn("absent_over_time", rule["expr"])
         self.assertIn("mairie360_backup_last_success_timestamp_seconds", rule["expr"],
                       "the metric Deploiment charts/backup pushes")
