@@ -10,7 +10,7 @@
 #                       the secrets are protected anyway), create and update
 #                       machines and their IPs (MAIR-637; no delete, no
 #                       snapshot or image), create and configure buckets
-#                       (MAIR-618; no bucket or object delete);
+#                       (no bucket delete; objects: the state lock only);
 #   ci-ansible          role k8s_instance_secrets: find the secrets, read,
 #                       add and disable versions (no delete).
 
@@ -29,6 +29,9 @@ locals {
         "ObjectStorageBucketsWrite",
         "ObjectStorageObjectsRead",
         "ObjectStorageObjectsWrite",
+        # Release of the state lock (<key>.tflock). Bucket policies bound it:
+        # on the state bucket the .tflock objects only, nothing on the others.
+        "ObjectStorageObjectsDelete",
         "SecretManagerReadOnly",
         "SecretManagerSecretCreate",
         "SecretManagerSecretWrite",

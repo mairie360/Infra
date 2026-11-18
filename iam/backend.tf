@@ -1,11 +1,15 @@
 terraform {
   # State in the versioned bucket of bootstrap/. Credentials: AWS_ACCESS_KEY_ID
   # and AWS_SECRET_ACCESS_KEY, set from the scw CLI profile by scripts/tf.sh.
-  # No state lock: run one apply at a time (CI only plans).
+  # State lock: a <key>.tflock object written with a conditional write
+  # (If-None-Match), supported by Scaleway Object Storage; a second plan or
+  # apply waits or fails instead of overwriting the state.
   backend "s3" {
     bucket = "mairie360-tfstate"
     key    = "iam.tfstate"
     region = "fr-par"
+
+    use_lockfile = true
 
     endpoints = {
       s3 = "https://s3.fr-par.scw.cloud"
