@@ -61,7 +61,7 @@ run "plan_key_is_read_only" {
   assert {
     condition = alltrue([
       for r in scaleway_iam_policy.ci["ci-terraform-plan"].rule : alltrue([
-        for s in r.permission_set_names : endswith(s, "ReadOnly")
+        for s in r.permission_set_names : can(regex("(ReadOnly|Read|List)$", s))
       ])
     ])
     error_message = "The key of pull request plans only reads."
@@ -113,6 +113,12 @@ run "apply_key_manages_machines_without_delete" {
   assert {
     condition     = contains(one(scaleway_iam_policy.ci["ci-terraform-plan"].rule).permission_set_names, "InstancesReadOnly")
     error_message = "The plan key reads the machines it plans."
+  }
+
+  # InstancesReadOnly does not cover the volumes: the first CI plan failed with "insufficient permissions: read volume".
+  assert {
+    condition     = alltrue([for n in ["InstancesVolumeRead", "InstancesVolumeList"] : contains(one(scaleway_iam_policy.ci["ci-terraform-plan"].rule).permission_set_names, n)])
+    error_message = "The plan key reads the volumes of the machines it plans."
   }
 }
 
