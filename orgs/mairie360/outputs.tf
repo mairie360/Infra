@@ -59,3 +59,8 @@ output "n8n_machine" {
     public_ipv6 = module.n8n[0].public_ipv6
   }
 }
+
+output "hostnames" {
+  description = "Public names of each instance (modules/dns), by env; empty while dns_zone is null."
+  value       = { for env, dns in module.dns : env => dns.hostnames }
+}

@@ -27,6 +27,52 @@ resource "scaleway_instance_ip" "v6" {
   }
 }
 
+# Public ports of the machine, in front of its ufw (mairie360/ansible opens the
+# same ones): inbound dropped by default, stateful (answers and outbound
+# connections such as WireGuard to the hub pass), outbound open. Not created
+# when public_ports is null: the machine keeps the project's default group.
+resource "scaleway_instance_security_group" "this" {
+  count = var.public_ports == null ? 0 : 1
+
+  name                    = var.name
+  project_id              = var.project_id
+  zone                    = var.zone
+  stateful                = true
+  inbound_default_policy  = "drop"
+  outbound_default_policy = "accept"
+  # Scaleway's SMTP egress block (25, 465, 587): the platform sends e-mail
+  # through the Resend HTTPS API.
+  enable_default_security = true
+
+  dynamic "inbound_rule" {
+    for_each = var.public_ports.tcp
+    content {
+      action   = "accept"
+      protocol = "TCP"
+      port     = inbound_rule.value
+    }
+  }
+
+  dynamic "inbound_rule" {
+    for_each = var.public_ports.udp
+    content {
+      action   = "accept"
+      protocol = "UDP"
+      port     = inbound_rule.value
+    }
+  }
+
+  # Path MTU discovery and ping.
+  inbound_rule {
+    action   = "accept"
+    protocol = "ICMP"
+  }
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
 resource "scaleway_instance_server" "this" {
   name       = var.name
   type       = var.type
@@ -34,6 +80,8 @@ resource "scaleway_instance_server" "this" {
   project_id = var.project_id
   zone       = var.zone
   ip_ids     = [scaleway_instance_ip.v4.id, scaleway_instance_ip.v6.id]
+  # Moving a machine to its group is done in place, without a restart.
+  security_group_id = var.public_ports == null ? null : scaleway_instance_security_group.this[0].id
   # Sorted: the API returns them sorted.
   tags = sort(var.tags)
 

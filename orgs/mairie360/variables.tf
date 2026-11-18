@@ -10,14 +10,32 @@ variable "project_id" {
 }
 
 variable "instances" {
-  description = "Instances of the group (key = env_name of the Ansible inventory) and their machine."
+  description = "Instances of the group (key = env_name of the Ansible inventory) and their machine: a tier (small, medium, large, modules/instance) or an explicit type and volume size."
   type = map(object({
     machine = object({
-      type                = string
-      root_volume_size_gb = number
+      tier                = optional(string)
+      type                = optional(string)
+      root_volume_size_gb = optional(number)
       name                = optional(string)
     })
   }))
+}
+
+variable "dns_zone" {
+  description = "Zone of the group's public names in Scaleway Domains (<host>.<env>.<zone>, modules/dns). null = the names are managed elsewhere (mairie360-eip.fr is still served by o2switch)."
+  type        = string
+  default     = null
+}
+
+variable "extra_records" {
+  description = "Records of dns_zone outside the instances (mail, domain verification...), by a free key. The n8n machine gets n8n.<zone> on its own."
+  type = map(object({
+    name = string
+    type = string
+    data = string
+    ttl  = optional(number, 3600)
+  }))
+  default = {}
 }
 
 variable "argocd_machine" {
