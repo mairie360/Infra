@@ -1,0 +1,93 @@
+# promtool unit tests of the alert rules (run by tests/test_alert_rules.py when
+# promtool is installed): each alert fires above its threshold, not under it.
+# rule_files are written by the test runner (alerts/*/*.yml, __ENV__ = dev).
+rule_files: [instance-platform.yml, group-argocd.yml, group-probes.yml]
+evaluation_interval: 1m
+tests:
+  - interval: 1m
+    input_series:
+      # 3 % of 5xx, 100 req/min: fires.
+      - series: 'traefik_entrypoint_requests_total{entrypoint="websecure",code="200"}'
+        values: '0+97x20'
+      - series: 'traefik_entrypoint_requests_total{entrypoint="websecure",code="502"}'
+        values: '0+3x20'
+      - series: 'k8s_node_filesystem_usage_bytes'
+        values: '85x20'
+      - series: 'k8s_node_filesystem_capacity_bytes'
+        values: '100x20'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: HighErrorRate
+        exp_alerts:
+          - exp_labels: { severity: critical, env: dev }
+            exp_annotations:
+              summary: "More than 2 % of the requests to dev answer 5xx"
+              description: "3% of the HTTPS requests over the last 5 minutes answered 5xx (Traefik). Only counted above 15 requests in 5 minutes, so one error at night does not page."
+      - eval_time: 15m
+        alertname: DiskAlmostFull
+        exp_alerts:
+          - exp_labels: { severity: critical, env: dev }
+            exp_annotations:
+              summary: "Disk of dev more than 80 % full"
+              description: "The node disk (volumes, images, logs) of dev is 85% full. Postgres and k3s stop writing when it is full: clean images (k3s crictl rmi --prune) or grow the volume."
+
+  - interval: 1m
+    input_series:
+      # 1 % of 5xx: no alert. 2 requests in 5 min with one 5xx: no alert either.
+      - series: 'traefik_entrypoint_requests_total{entrypoint="websecure",code="200"}'
+        values: '0+99x20'
+      - series: 'traefik_entrypoint_requests_total{entrypoint="websecure",code="500"}'
+        values: '0+1x20'
+      - series: 'k8s_node_filesystem_usage_bytes'
+        values: '70x20'
+      - series: 'k8s_node_filesystem_capacity_bytes'
+        values: '100x20'
+    alert_rule_test:
+      - { eval_time: 15m, alertname: HighErrorRate, exp_alerts: [] }
+      - { eval_time: 15m, alertname: DiskAlmostFull, exp_alerts: [] }
+
+  - interval: 1m
+    input_series:
+      - series: 'traefik_entrypoint_requests_total{entrypoint="websecure",code="500"}'
+        values: '0+0.1x20'
+      - series: 'traefik_entrypoint_requests_total{entrypoint="websecure",code="200"}'
+        values: '0+0.1x20'
+    alert_rule_test:
+      - { eval_time: 15m, alertname: HighErrorRate, exp_alerts: [] }
+
+  - interval: 1m
+    input_series:
+      # core-api restarted after an OOM kill; bff restarted for another reason.
+      - series: 'kube_pod_container_status_restarts_total{pod="dev-core-api-1",container="core-api"}'
+        values: '0x5 1x10'
+      - series: 'kube_pod_container_status_last_terminated_reason{pod="dev-core-api-1",container="core-api",reason="OOMKilled"}'
+        values: '0x5 1x10'
+      - series: 'kube_pod_container_status_restarts_total{pod="dev-user-bff-1",container="user-bff"}'
+        values: '0x5 1x10'
+      - series: 'kube_pod_container_status_last_terminated_reason{pod="dev-user-bff-1",container="user-bff",reason="Error"}'
+        values: '0x5 1x10'
+    alert_rule_test:
+      - eval_time: 8m
+        alertname: ContainerOOMKilled
+        exp_alerts:
+          - exp_labels: { severity: critical, env: dev, pod: dev-core-api-1, container: core-api }
+            exp_annotations:
+              summary: "core-api of dev-core-api-1 was OOM-killed on dev"
+              description: "The container restarted in the last 10 minutes after exceeding its memory limit: raise resources.limits.memory in the instance values or find the leak."
+
+  - interval: 1m
+    input_series:
+      - series: 'argocd_app_info{name="prod",health_status="Healthy",sync_status="OutOfSync"}'
+        values: '1x40'
+      - series: 'argocd_app_info{name="dev",health_status="Degraded",sync_status="OutOfSync"}'
+        values: '1x40'
+    alert_rule_test:
+      - { eval_time: 20m, alertname: ArgoCDProdOutOfSync, exp_alerts: [] }
+      - eval_time: 35m
+        alertname: ArgoCDProdOutOfSync
+        exp_alerts:
+          - exp_labels: { severity: critical, name: prod }
+            exp_annotations:
+              summary: "Argo CD application prod OutOfSync for 30 minutes"
+              description: "prod does not run what the prod branch says: a sync is stuck or refused (argocd app get prod)."
+      - { eval_time: 35m, alertname: ArgoCDProdUnhealthy, exp_alerts: [] }

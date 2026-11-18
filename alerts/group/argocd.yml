@@ -1,0 +1,55 @@
+# The group's Argo CD, scraped by the hub probe collector (mairie360/ansible
+# role hub_probe) and pushed to <org>-probes.
+# Prod Applications: the instance `prod` and its add-ons `<addon>-prod`.
+name: argocd
+interval: 1m
+rules:
+  - alert: ArgoCDProdUnhealthy
+    expr: >-
+      max by (name, health_status) (
+        {__name__="argocd_app_info", name=~"prod|.+-prod", health_status=~"Degraded|Missing|Unknown"}
+      ) > 0
+    for: 30m
+    labels:
+      severity: critical
+    annotations:
+      summary: "Argo CD application {{ $labels.name }} is {{ $labels.health_status }}"
+      description: >-
+        For 30 minutes. On the Argo CD machine:
+        kubectl -n argocd get application {{ $labels.name }} -o yaml (status.resources).
+
+  - alert: ArgoCDProdOutOfSync
+    expr: >-
+      max by (name) (
+        {__name__="argocd_app_info", name=~"prod|.+-prod", sync_status="OutOfSync"}
+      ) > 0
+    for: 30m
+    labels:
+      severity: critical
+    annotations:
+      summary: "Argo CD application {{ $labels.name }} OutOfSync for 30 minutes"
+      description: >-
+        prod does not run what the prod branch says: a sync is stuck or
+        refused (argocd app get {{ $labels.name }}).
+
+  - alert: ArgoCDClusterDisconnected
+    expr: >-
+      min by (name) ({__name__="argocd_cluster_connection_status"}) < 1
+    for: 10m
+    labels:
+      severity: critical
+    annotations:
+      summary: "Argo CD lost the connection to cluster {{ $labels.name }}"
+      description: >-
+        The WireGuard tunnel or the instance's API server is down: Argo CD can
+        no longer deploy there.
+
+  - alert: ArgoCDMetricsSilent
+    expr: absent_over_time({__name__="argocd_app_info"}[15m])
+    labels:
+      severity: critical
+    annotations:
+      summary: No Argo CD metrics for 15 minutes
+      description: >-
+        The hub probe collector no longer scrapes argocd-metrics: the Argo CD
+        alerts cannot fire.

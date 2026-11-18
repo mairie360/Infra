@@ -11,28 +11,28 @@ rules:
       max by (http_url) (
         max_over_time({__name__=~"httpcheck_status(_ratio)?", http_status_class="2xx"}[2m])
       ) < 1
-    for: 5m
+    for: 2m
     labels:
       severity: critical
     annotations:
       summary: "{{ $labels.http_url }} does not answer 2xx"
       description: >-
         The external probe on the Argo CD machine gets no 2xx from
-        {{ $labels.http_url }} for 5 minutes.
+        {{ $labels.http_url }} for 2 minutes.
 
   - alert: SiteUnreachable
     expr: >-
       max by (http_url) (
         max_over_time({__name__=~"httpcheck_error(_total)?"}[2m])
       ) > 0
-    for: 5m
+    for: 2m
     labels:
       severity: critical
     annotations:
       summary: "{{ $labels.http_url }} unreachable"
       description: >-
         The external probe cannot connect to {{ $labels.http_url }} (DNS,
-        TLS or TCP error) for 5 minutes.
+        TLS or TCP error) for 2 minutes.
 
   - alert: ProbeSilent
     expr: absent_over_time({__name__=~"httpcheck_duration(_milliseconds)?"}[15m])
