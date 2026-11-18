@@ -1,10 +1,14 @@
 project_id = "716a44bd-7d6f-4940-87ca-711e62799cd0"
 
 instances = {
-  dev     = { machine = { type = "POP2-2C-8G", root_volume_size_gb = 30 } }
-  staging = { machine = { type = "POP2-2C-8G", root_volume_size_gb = 30 } }
-  prod    = { machine = { type = "POP2-2C-8G", root_volume_size_gb = 30 } }
+  dev     = { machine = { tier = "small" } }
+  staging = { machine = { tier = "small" } }
+  prod    = { machine = { tier = "small" } }
 }
+
+# Public names: mairie360-eip.fr is still served by o2switch. Set it once the
+# zone is in Scaleway Domains (records first imported or recreated there).
+# dns_zone = "mairie360-eip.fr"
 
 # Existing console name kept: a rename is harmless but not the point of the import.
 argocd_machine = { name = "argocd hub", type = "DEV1-M", root_volume_size_gb = 20 }

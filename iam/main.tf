@@ -52,6 +52,9 @@ locals {
         "InstancesImageRead",
         "InstancesSecurityGroupRead",
         "InstancesSecurityGroupList",
+        # Security group of each machine (public ports, modules/machine).
+        "InstancesSecurityGroupCreate",
+        "InstancesSecurityGroupWrite",
         # MAIR-620/623: Cockpit data sources, alert manager, alert rules.
         # Cockpit has no finer set than read-only / full access.
         "ObservabilityFullAccess",
