@@ -15,8 +15,8 @@ resource "scaleway_instance_ip" "v4" {
   }
 }
 
-# Every machine also has a routed IPv6: it must be listed in ip_ids, or an
-# apply would detach it.
+# Every machine also has a routed IPv6: it must be listed in ip_ids, which is
+# applied when the machine is created.
 resource "scaleway_instance_ip" "v6" {
   type       = "routed_ipv6"
   project_id = var.project_id
@@ -50,7 +50,11 @@ resource "scaleway_instance_server" "this" {
     prevent_destroy = true
     # Imported machines were installed from an image Terraform did not pick;
     # a new image label must never rebuild a machine. ip_id is the deprecated
-    # single-IP form the API still fills; ip_ids is the one managed.
-    ignore_changes = [image, ip_id, user_data, cloud_init]
+    # single-IP form the API still fills. ip_ids is only used when a machine is
+    # created: for an imported one the provider reads it back empty, which made
+    # every plan propose to "attach" the two addresses already attached. The
+    # addresses are their own resources (prevent_destroy) and are never moved
+    # from here.
+    ignore_changes = [image, ip_id, ip_ids, user_data, cloud_init]
   }
 }
