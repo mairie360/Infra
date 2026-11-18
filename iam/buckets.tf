@@ -184,6 +184,14 @@ resource "scaleway_object_bucket_policy" "state" {
           Action    = concat(local.config_read, ["s3:GetObject", "s3:PutObject"])
           Resource  = [var.state_bucket, "${var.state_bucket}/*"]
         },
+        {
+          # Releasing the state lock deletes <key>.tflock; nothing else.
+          Sid       = "ci-apply-state-lock"
+          Effect    = "Allow"
+          Principal = { SCW = local.ci_apply }
+          Action    = ["s3:DeleteObject"]
+          Resource  = ["${var.state_bucket}/*.tflock"]
+        },
       ],
       length(local.operators) == 0 ? [] : [{
         Sid       = "operators"

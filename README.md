@@ -263,8 +263,13 @@ it reads the state and the secrets' metadata, never a secret value.
 ## State
 
 The state is in `s3://mairie360-tfstate/<root>.tfstate`, versioned: restore
-the previous version of the object to roll a broken state back. There is no
-state lock: one apply at a time.
+the previous version of the object to roll a broken state back. Every apply
+(local or CI) takes a lock, `<root>.tfstate.tflock` written with a conditional
+write (`use_lockfile`, Terraform >= 1.11, `If-None-Match` supported by Scaleway
+Object Storage): a second apply fails with "Error acquiring the state lock"
+instead of overwriting the state. The CI plans run with `-lock=false` (read-only
+key). A lock left by a killed run: check nobody applies, then
+`scripts/tf.sh <root> force-unlock <lock id>`.
 
 ## Checks
 
