@@ -30,8 +30,9 @@ python3 -m unittest tests.test_alert_rules -v
 Without it, put the `promtool` of the Prometheus image on the `PATH` first:
 
 ```bash
+bin=$(mktemp -d)
 docker create --name promtool prom/prometheus:v3.5.0 >/dev/null
-mkdir -p .bin && docker cp promtool:/bin/promtool .bin/ && docker rm promtool >/dev/null
-PATH="$PWD/.bin:$PATH" python3 -m unittest tests.test_alert_rules -v
-rm -rf .bin && docker image rm prom/prometheus:v3.5.0
+docker cp promtool:/bin/promtool "$bin/" && docker rm promtool >/dev/null
+PATH="$bin:$PATH" python3 -m unittest tests.test_alert_rules -v
+rm -rf "$bin" && docker image rm prom/prometheus:v3.5.0
 ```

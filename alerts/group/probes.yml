@@ -3,6 +3,11 @@
 # Metrics of the httpcheck receiver of the probe on the Argo CD machine
 # (mairie360/ansible role hub_probe). OTLP names may get a unit suffix in
 # Cockpit, hence the __name__ regexes.
+# httpcheck_status has one series per status code (http_status_code="200",
+# "0" for a transport error...). OTLP sends no staleness marker, so a series
+# that stopped (the 200 one after the site broke) is still returned for 5
+# minutes: SiteDown and SiteUnreachable only keep, per URL, the series of the
+# latest check (newest sample timestamp, 30 s of slack).
 name: external-probe
 interval: 1m
 rules:
@@ -10,6 +15,12 @@ rules:
     expr: >-
       max by (http_url) (
         {__name__=~"httpcheck_status(_ratio)?", http_status_class="2xx"}
+        and on (http_url, http_status_code)
+        (
+          timestamp({__name__=~"httpcheck_status(_ratio)?", http_status_class="2xx"})
+            >= on (http_url) group_left ()
+          max by (http_url) (timestamp({__name__=~"httpcheck_status(_ratio)?", http_status_class="2xx"})) - 30
+        )
       ) < 1
     for: 2m
     labels:
@@ -31,6 +42,12 @@ rules:
       (
         max by (http_url) (
           {__name__=~"httpcheck_status(_ratio)?", http_status_class="2xx"}
+          and on (http_url, http_status_code)
+          (
+            timestamp({__name__=~"httpcheck_status(_ratio)?", http_status_class="2xx"})
+              >= on (http_url) group_left ()
+            max by (http_url) (timestamp({__name__=~"httpcheck_status(_ratio)?", http_status_class="2xx"})) - 30
+          )
         ) >= 1
       )
     for: 2m

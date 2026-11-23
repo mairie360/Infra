@@ -175,3 +175,31 @@ tests:
         values: '1x20'
     alert_rule_test:
       - { eval_time: 20m, alertname: PostgresExporterSilent, exp_alerts: [] }
+
+  # The site answered 200 then breaks at the transport level: the scraper
+  # moves to the http_status_code="0" series and the 200 one stops without a
+  # staleness marker. Both alerts still fire 2 minutes after the first error.
+  - interval: 1m
+    input_series:
+      - series: 'httpcheck_status{http_url="https://cut.example",http_status_code="200",http_status_class="2xx"}'
+        values: '1 1 _x14'
+      - series: 'httpcheck_status{http_url="https://cut.example",http_status_code="0",http_status_class="2xx"}'
+        values: '_ _ 0x14'
+      - series: 'httpcheck_error{http_url="https://cut.example",error_message="dial tcp: connection refused"}'
+        values: '_ _ 1x14'
+    alert_rule_test:
+      - { eval_time: 3m, alertname: SiteDown, exp_alerts: [] }
+      - eval_time: 4m
+        alertname: SiteDown
+        exp_alerts:
+          - exp_labels: { severity: critical, http_url: "https://cut.example" }
+            exp_annotations:
+              summary: "https://cut.example does not answer 2xx"
+              description: "The external probe on the Argo CD machine gets no 2xx from https://cut.example for 2 minutes."
+      - eval_time: 4m
+        alertname: SiteUnreachable
+        exp_alerts:
+          - exp_labels: { severity: critical, http_url: "https://cut.example" }
+            exp_annotations:
+              summary: "https://cut.example unreachable"
+              description: "The external probe cannot connect to https://cut.example (DNS, TLS or TCP error) for 2 minutes. An error still in the 2-minute window does not count once the latest check answered 2xx again."
