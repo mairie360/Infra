@@ -11,6 +11,8 @@
 #                       machines and their IPs (MAIR-637; no delete, no
 #                       snapshot or image), create and configure buckets
 #                       (no bucket delete; objects: the state lock only);
+#                       Block Storage and DNS records: read only (their only
+#                       write sets are full access);
 #   ci-ansible          role k8s_instance_secrets: find the secrets, read,
 #                       add and disable versions (no delete).
 
@@ -18,7 +20,7 @@ locals {
   ci_applications = {
     ci-terraform-plan = {
       description     = "terraform plan of mairie360/Infra pull requests: read-only."
-      permission_sets = ["ObjectStorageReadOnly", "SecretManagerReadOnly", "InstancesReadOnly", "BlockStorageReadOnly", "ObservabilityReadOnly"]
+      permission_sets = ["ObjectStorageReadOnly", "SecretManagerReadOnly", "InstancesReadOnly", "BlockStorageReadOnly", "DomainsDNSReadOnly", "ObservabilityReadOnly"]
     }
     ci-terraform-apply = {
       description = "terraform apply of mairie360/Infra (approved workflow on main)."
@@ -49,6 +51,11 @@ locals {
         # The machines' system volumes are Block Storage volumes, read on every refresh
         # (the first CI plan failed with "read volume").
         "BlockStorageReadOnly",
+        # Records of dns_zone (orgs/<org>/dns.tf) are read on every refresh.
+        # Domains and Block Storage have no write set below full access, so
+        # the CI only reads them: DNS changes and root volume growth (tier up)
+        # are applied from a workstation (README, "Tiers" and "DNS").
+        "DomainsDNSReadOnly",
         "InstancesImageRead",
         "InstancesSecurityGroupRead",
         "InstancesSecurityGroupList",

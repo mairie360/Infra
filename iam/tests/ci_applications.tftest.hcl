@@ -124,6 +124,17 @@ run "apply_key_manages_machines_without_delete" {
     condition     = alltrue([for k in ["ci-terraform-plan", "ci-terraform-apply"] : contains(one(scaleway_iam_policy.ci[k].rule).permission_set_names, "BlockStorageReadOnly")])
     error_message = "The plan and apply keys read the Block Storage volumes of the machines."
   }
+
+  # Once dns_zone is set, every plan and apply refreshes the DNS records; the
+  # Domains and Block Storage write sets are full access, so the CI only reads.
+  assert {
+    condition = alltrue([for k in ["ci-terraform-plan", "ci-terraform-apply"] :
+      contains(one(scaleway_iam_policy.ci[k].rule).permission_set_names, "DomainsDNSReadOnly")
+      && !contains(one(scaleway_iam_policy.ci[k].rule).permission_set_names, "DomainsDNSFullAccess")
+      && !contains(one(scaleway_iam_policy.ci[k].rule).permission_set_names, "BlockStorageFullAccess")
+    ])
+    error_message = "The CI keys read the DNS records and never write DNS or Block Storage."
+  }
 }
 
 # MAIR-618: the apply key creates the locked backup buckets, never deletes one.

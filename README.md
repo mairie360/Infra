@@ -77,7 +77,9 @@ An instance machine is sized by its **tier** (`instances.<env>.machine.tier` of
 machine in place (stop, change, start: plan it in a maintenance window). The
 volume can only grow: moving down would ask for the smaller tier's size and
 fail, so keep the current size explicitly first (for example `tier = "small"`
-with `root_volume_size_gb = 120`).
+with `root_volume_size_gb = 120`). Growing the volume needs Block Storage write
+rights, which the CI keys do not have (the only write set is full access):
+apply a tier change from a workstation (`scripts/tf.sh orgs/<org> apply`).
 
 ### Security groups
 
@@ -106,7 +108,10 @@ restart; apply it on dev first and check SSH, the sites and the tunnel.
 verifications). Everything is off while `dns_zone` is null: `mairie360-eip.fr`
 is still served by o2switch. To switch: create the zone in Scaleway Domains,
 copy the records Terraform does not manage into `extra_records` (Resend
-DKIM/SPF/MX first, with `priority` on the MX records), apply, then move the name servers at the registrar.
+DKIM/SPF/MX first, with `priority` on the MX records), apply from a
+workstation (the CI keys only read DNS records: the Domains write set is full
+access; apply `iam/` first so they can read them), then move the name servers
+at the registrar.
 
 ## Backup buckets (MAIR-618)
 
