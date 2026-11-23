@@ -44,14 +44,18 @@ run "no_ci_key_can_manage_iam_or_delete" {
 
   assert {
     condition = alltrue([
-      for p in scaleway_iam_policy.ci : alltrue([
+      for name, p in scaleway_iam_policy.ci : alltrue([
         for r in p.rule : alltrue([
-          # ObservabilityFullAccess: Cockpit has no write set below full access (MAIR-620).
-          for s in r.permission_set_names : !startswith(s, "IAM") && !endswith(s, "Delete") && (!endswith(s, "FullAccess") || s == "ObservabilityFullAccess")
+          # ObservabilityFullAccess: Cockpit has no write set below full access.
+          # ObjectStorageObjectsDelete of the apply key: release of the state
+          # lock, bounded by the bucket policies to mairie360-tfstate/*.tflock.
+          for s in r.permission_set_names : !startswith(s, "IAM")
+          && (!endswith(s, "Delete") || (name == "ci-terraform-apply" && s == "ObjectStorageObjectsDelete"))
+          && (!endswith(s, "FullAccess") || s == "ObservabilityFullAccess")
         ])
       ])
     ])
-    error_message = "A CI key never gets IAM rights, a Delete set or a FullAccess set."
+    error_message = "A CI key never gets IAM rights, a Delete set (but the apply key's state lock release) or a FullAccess set."
   }
 }
 
