@@ -179,8 +179,8 @@ After every successful run, the backup CronJob of an instance (Deploiment
 the instance's collector, hence to `<org>-<env>-metrics`.
 `alerts/instance/backups.yml` (pushed to every instance by
 `scripts/push-alert-rules.sh`) raises `BackupMissed` when the last success is
-older than 26 h, or when nothing was reported for 27 h (a CronJob that never
-runs or cannot reach the collector). It needs `global.observability.enabled`
+older than 7 h (the CronJob runs every 6 h), or when nothing was reported for
+8 h (a CronJob that never runs or cannot reach the collector). It needs `global.observability.enabled`
 on the instance (MAIR-620).
 
 ## Vault of the instance secrets (MAIR-617)
