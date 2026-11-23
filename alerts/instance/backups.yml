@@ -1,6 +1,6 @@
-# MAIR-622: pushed to every instance's metrics source (<org>-<env>-metrics) by
+# Pushed to every instance's metrics source (<org>-<env>-metrics) by
 # scripts/push-alert-rules.sh (__ENV__ = the env); e-mailed through the alert
-# manager (MAIR-623). After every successful run, the backup CronJob of the
+# manager. After every successful run, the backup CronJob of the
 # instance (Deploiment charts/backup) pushes the time of that success to the
 # instance's collector: mairie360_backup_last_success_timestamp_seconds.
 # The CronJob runs every 6 h: no success for 7 h means the last run failed or
@@ -23,3 +23,37 @@ rules:
         7 h: check its last Job (kubectl -n mairie360-__ENV__ get jobs),
         the bucket key and the restic repository (Deploiment
         charts/backup/README.md).
+
+  # The weekly restore test (Deploiment charts/backup restoreTest) restores the
+  # newest backup into a throwaway Postgres. No success for 8 days: last
+  # Sunday's test failed or never ran, so nothing proves the backups restore.
+  - alert: RestoreTestMissed
+    expr: >-
+      (time() - max(max_over_time({__name__=~"mairie360_restore_test_last_success_timestamp_seconds"}[9d])) > 691200)
+      or
+      absent_over_time({__name__=~"mairie360_restore_test_last_success_timestamp_seconds"}[9d])
+    for: 30m
+    labels:
+      severity: critical
+      env: __ENV__
+    annotations:
+      summary: "No successful restore test of __ENV__ for more than 8 days"
+      description: >-
+        Check the last Job (kubectl -n mairie360-__ENV__ get jobs | grep restore-test)
+        and its logs: a dump that no longer loads is a backup that cannot be
+        restored (Deploiment charts/backup/README.md, Weekly restore test).
+
+  # Restoring the database alone must fit well inside the 2 h RTO
+  # (Deploiment docs/*/disaster-recovery.md): above 1 h, the rest of the
+  # rebuild no longer fits.
+  - alert: RestoreTooSlow
+    expr: max(max_over_time({__name__=~"mairie360_restore_test_duration_seconds"}[8d])) > 3600
+    labels:
+      severity: critical
+      env: __ENV__
+    annotations:
+      summary: "Restoring the database of __ENV__ takes more than 1 h"
+      description: >-
+        The last restore test took {{ $value | humanizeDuration }}: with the
+        machine rebuild, the 2 h RTO is no longer met. Grow the restore Job's
+        resources or the machine, or review the RTO.
