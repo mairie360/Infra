@@ -3,36 +3,62 @@
 # Metrics of the httpcheck receiver of the probe on the Argo CD machine
 # (mairie360/ansible role hub_probe). OTLP names may get a unit suffix in
 # Cockpit, hence the __name__ regexes.
+# httpcheck_status has one series per status code (http_status_code="200",
+# "0" for a transport error...). OTLP sends no staleness marker, so a series
+# that stopped (the 200 one after the site broke) is still returned for 5
+# minutes: SiteDown and SiteUnreachable only keep, per URL, the series of the
+# latest check (newest sample timestamp, 30 s of slack).
 name: external-probe
 interval: 1m
 rules:
   - alert: SiteDown
     expr: >-
       max by (http_url) (
-        max_over_time({__name__=~"httpcheck_status(_ratio)?", http_status_class="2xx"}[2m])
+        {__name__=~"httpcheck_status(_ratio)?", http_status_class="2xx"}
+        and on (http_url, http_status_code)
+        (
+          timestamp({__name__=~"httpcheck_status(_ratio)?", http_status_class="2xx"})
+            >= on (http_url) group_left ()
+          max by (http_url) (timestamp({__name__=~"httpcheck_status(_ratio)?", http_status_class="2xx"})) - 30
+        )
       ) < 1
-    for: 5m
+    for: 2m
     labels:
       severity: critical
     annotations:
       summary: "{{ $labels.http_url }} does not answer 2xx"
       description: >-
         The external probe on the Argo CD machine gets no 2xx from
-        {{ $labels.http_url }} for 5 minutes.
+        {{ $labels.http_url }} for 2 minutes.
 
   - alert: SiteUnreachable
     expr: >-
-      max by (http_url) (
-        max_over_time({__name__=~"httpcheck_error(_total)?"}[2m])
-      ) > 0
-    for: 5m
+      (
+        max by (http_url) (
+          max_over_time({__name__=~"httpcheck_error(_total)?"}[2m])
+        ) > 0
+      )
+      unless on (http_url)
+      (
+        max by (http_url) (
+          {__name__=~"httpcheck_status(_ratio)?", http_status_class="2xx"}
+          and on (http_url, http_status_code)
+          (
+            timestamp({__name__=~"httpcheck_status(_ratio)?", http_status_class="2xx"})
+              >= on (http_url) group_left ()
+            max by (http_url) (timestamp({__name__=~"httpcheck_status(_ratio)?", http_status_class="2xx"})) - 30
+          )
+        ) >= 1
+      )
+    for: 2m
     labels:
       severity: critical
     annotations:
       summary: "{{ $labels.http_url }} unreachable"
       description: >-
         The external probe cannot connect to {{ $labels.http_url }} (DNS,
-        TLS or TCP error) for 5 minutes.
+        TLS or TCP error) for 2 minutes. An error still in the 2-minute window
+        does not count once the latest check answered 2xx again.
 
   - alert: ProbeSilent
     expr: absent_over_time({__name__=~"httpcheck_duration(_milliseconds)?"}[15m])

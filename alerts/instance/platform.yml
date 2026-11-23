@@ -1,0 +1,156 @@
+# Health of one instance, pushed to every instance's metrics source
+# (<org>-<env>-metrics) by scripts/push-alert-rules.sh (__ENV__ = the env);
+# e-mailed through the group's alert manager. Series sent by the instance's
+# OTEL collector (Deploiment charts/observability): node (kubeletstats),
+# kube-state-metrics, postgres_exporter, cert-manager and Traefik. OTLP names
+# may get a unit suffix in Cockpit, hence the __name__ regexes.
+name: platform-__ENV__
+interval: 1m
+rules:
+  - alert: DiskAlmostFull
+    expr: >-
+      max({__name__=~"k8s_node_filesystem_usage(_bytes)?"})
+        / max({__name__=~"k8s_node_filesystem_capacity(_bytes)?"}) > 0.8
+    for: 10m
+    labels:
+      severity: critical
+      env: __ENV__
+    annotations:
+      summary: "Disk of __ENV__ more than 80 % full"
+      description: >-
+        The node disk (volumes, images, logs) of __ENV__ is {{ $value | humanizePercentage }}
+        full. Postgres and k3s stop writing when it is full: clean images
+        (k3s crictl rmi --prune) or grow the volume.
+
+  - alert: MemoryHigh
+    expr: >-
+      max({__name__=~"k8s_node_memory_working_set(_bytes)?"})
+        / (max({__name__=~"k8s_node_memory_working_set(_bytes)?"}) + max({__name__=~"k8s_node_memory_available(_bytes)?"}))
+        > 0.9
+    for: 10m
+    labels:
+      severity: critical
+      env: __ENV__
+    annotations:
+      summary: "Memory of __ENV__ above 90 % for 10 minutes"
+      description: >-
+        The node of __ENV__ uses {{ $value | humanizePercentage }} of its memory:
+        pods are about to be OOM-killed (kubectl top pods -n mairie360-__ENV__).
+
+  - alert: ContainerCrashLooping
+    expr: >-
+      max by (pod, container) (
+        max_over_time({__name__="kube_pod_container_status_waiting_reason", reason="CrashLoopBackOff"}[5m])
+      ) > 0
+    for: 5m
+    labels:
+      severity: critical
+      env: __ENV__
+    annotations:
+      summary: "{{ $labels.container }} of {{ $labels.pod }} is crash-looping on __ENV__"
+      description: >-
+        kubectl -n mairie360-__ENV__ logs {{ $labels.pod }} -c {{ $labels.container }} --previous
+
+  - alert: ContainerOOMKilled
+    expr: >-
+      (
+        max by (pod, container) (increase({__name__=~"kube_pod_container_status_restarts(_total)?"}[10m])) > 0
+      )
+      and on (pod, container)
+      (
+        max by (pod, container) ({__name__="kube_pod_container_status_last_terminated_reason", reason="OOMKilled"}) > 0
+      )
+    labels:
+      severity: critical
+      env: __ENV__
+    annotations:
+      summary: "{{ $labels.container }} of {{ $labels.pod }} was OOM-killed on __ENV__"
+      description: >-
+        The container restarted in the last 10 minutes after exceeding its
+        memory limit: raise resources.limits.memory in the instance values or
+        find the leak.
+
+  - alert: CertificateExpiresSoon
+    expr: >-
+      min by (name) ({__name__=~"certmanager_certificate_expiration_timestamp(_seconds)?"}) - time()
+        < 14 * 86400
+    for: 1h
+    labels:
+      severity: critical
+      env: __ENV__
+    annotations:
+      summary: "Certificate {{ $labels.name }} of __ENV__ expires in less than 14 days"
+      description: >-
+        cert-manager should have renewed it 30 days before expiry: its HTTP-01
+        challenge is stuck (Deploiment CLAUDE.md, HTTPS chain;
+        kubectl -n mairie360-__ENV__ describe certificate {{ $labels.name }}).
+
+  - alert: HighErrorRate
+    expr: >-
+      sum(rate({__name__="traefik_entrypoint_requests_total", entrypoint="websecure", code=~"5.."}[5m]))
+        / sum(rate({__name__="traefik_entrypoint_requests_total", entrypoint="websecure"}[5m]))
+        > 0.02
+      and sum(rate({__name__="traefik_entrypoint_requests_total", entrypoint="websecure"}[5m])) > 0.05
+    labels:
+      severity: critical
+      env: __ENV__
+    annotations:
+      summary: "More than 2 % of the requests to __ENV__ answer 5xx"
+      description: >-
+        {{ $value | humanizePercentage }} of the HTTPS requests over the last 5
+        minutes answered 5xx (Traefik). Only counted above 15 requests in 5
+        minutes, so one error at night does not page.
+
+  - alert: PostgresConnectionsHigh
+    expr: >-
+      sum({__name__="pg_stat_database_numbackends"})
+        / max({__name__="pg_settings_max_connections"}) > 0.8
+    for: 5m
+    labels:
+      severity: critical
+      env: __ENV__
+    annotations:
+      summary: "Postgres of __ENV__ uses more than 80 % of max_connections"
+      description: >-
+        {{ $value | humanizePercentage }} of max_connections are open: the API
+        pools (DB pool sizes) or a connection leak will soon get
+        "too many clients".
+
+  - alert: PostgresDown
+    expr: max({__name__="pg_up"}) < 1
+    for: 2m
+    labels:
+      severity: critical
+      env: __ENV__
+    annotations:
+      summary: "postgres_exporter cannot reach the database of __ENV__"
+      description: >-
+        pg_up is 0: the database pod is down or refuses connections
+        (kubectl -n mairie360-__ENV__ get pods -l app.kubernetes.io/component=database).
+
+  - alert: PostgresExporterSilent
+    expr: >-
+      absent_over_time({__name__="pg_up"}[5m])
+      and on ()
+      count(present_over_time({__name__="pg_up"}[7d])) > 0
+    labels:
+      severity: critical
+      env: __ENV__
+    annotations:
+      summary: "No pg_up from the postgres_exporter of __ENV__ for 5 minutes"
+      description: >-
+        postgres_exporter of __ENV__ sent pg_up in the last 7 days but nothing
+        for 5 minutes: the exporter or its scrape is down, so PostgresDown can
+        no longer see the database (kubectl -n mairie360-__ENV__ get pods).
+        Instances that never ran the exporter do not fire.
+
+  - alert: InstanceMetricsSilent
+    expr: absent_over_time({__name__=~"k8s_node_cpu_usage(_ratio)?|k8s_node_memory_working_set(_bytes)?"}[10m])
+    labels:
+      severity: critical
+      env: __ENV__
+    annotations:
+      summary: "No metrics from __ENV__ for 10 minutes"
+      description: >-
+        The collector of __ENV__ sends nothing: the machine, k3s or the
+        collector is down, so none of the other alerts of __ENV__ can fire.

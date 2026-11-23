@@ -1,0 +1,205 @@
+# promtool unit tests of the alert rules (run by tests/test_alert_rules.py when
+# promtool is installed): each alert fires above its threshold, not under it.
+# rule_files are written by the test runner (alerts/*/*.yml, __ENV__ = dev).
+rule_files: [instance-platform.yml, group-argocd.yml, group-probes.yml]
+evaluation_interval: 1m
+tests:
+  - interval: 1m
+    input_series:
+      # 3 % of 5xx, 100 req/min: fires.
+      - series: 'traefik_entrypoint_requests_total{entrypoint="websecure",code="200"}'
+        values: '0+97x20'
+      - series: 'traefik_entrypoint_requests_total{entrypoint="websecure",code="502"}'
+        values: '0+3x20'
+      - series: 'k8s_node_filesystem_usage_bytes'
+        values: '85x20'
+      - series: 'k8s_node_filesystem_capacity_bytes'
+        values: '100x20'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: HighErrorRate
+        exp_alerts:
+          - exp_labels: { severity: critical, env: dev }
+            exp_annotations:
+              summary: "More than 2 % of the requests to dev answer 5xx"
+              description: "3% of the HTTPS requests over the last 5 minutes answered 5xx (Traefik). Only counted above 15 requests in 5 minutes, so one error at night does not page."
+      - eval_time: 15m
+        alertname: DiskAlmostFull
+        exp_alerts:
+          - exp_labels: { severity: critical, env: dev }
+            exp_annotations:
+              summary: "Disk of dev more than 80 % full"
+              description: "The node disk (volumes, images, logs) of dev is 85% full. Postgres and k3s stop writing when it is full: clean images (k3s crictl rmi --prune) or grow the volume."
+
+  - interval: 1m
+    input_series:
+      # 1 % of 5xx: no alert. 2 requests in 5 min with one 5xx: no alert either.
+      - series: 'traefik_entrypoint_requests_total{entrypoint="websecure",code="200"}'
+        values: '0+99x20'
+      - series: 'traefik_entrypoint_requests_total{entrypoint="websecure",code="500"}'
+        values: '0+1x20'
+      - series: 'k8s_node_filesystem_usage_bytes'
+        values: '70x20'
+      - series: 'k8s_node_filesystem_capacity_bytes'
+        values: '100x20'
+    alert_rule_test:
+      - { eval_time: 15m, alertname: HighErrorRate, exp_alerts: [] }
+      - { eval_time: 15m, alertname: DiskAlmostFull, exp_alerts: [] }
+
+  - interval: 1m
+    input_series:
+      - series: 'traefik_entrypoint_requests_total{entrypoint="websecure",code="500"}'
+        values: '0+0.1x20'
+      - series: 'traefik_entrypoint_requests_total{entrypoint="websecure",code="200"}'
+        values: '0+0.1x20'
+    alert_rule_test:
+      - { eval_time: 15m, alertname: HighErrorRate, exp_alerts: [] }
+
+  - interval: 1m
+    input_series:
+      # core-api restarted after an OOM kill; bff restarted for another reason.
+      - series: 'kube_pod_container_status_restarts_total{pod="dev-core-api-1",container="core-api"}'
+        values: '0x5 1x10'
+      - series: 'kube_pod_container_status_last_terminated_reason{pod="dev-core-api-1",container="core-api",reason="OOMKilled"}'
+        values: '0x5 1x10'
+      - series: 'kube_pod_container_status_restarts_total{pod="dev-user-bff-1",container="user-bff"}'
+        values: '0x5 1x10'
+      - series: 'kube_pod_container_status_last_terminated_reason{pod="dev-user-bff-1",container="user-bff",reason="Error"}'
+        values: '0x5 1x10'
+    alert_rule_test:
+      - eval_time: 8m
+        alertname: ContainerOOMKilled
+        exp_alerts:
+          - exp_labels: { severity: critical, env: dev, pod: dev-core-api-1, container: core-api }
+            exp_annotations:
+              summary: "core-api of dev-core-api-1 was OOM-killed on dev"
+              description: "The container restarted in the last 10 minutes after exceeding its memory limit: raise resources.limits.memory in the instance values or find the leak."
+
+  - interval: 1m
+    input_series:
+      - series: 'argocd_app_info{name="prod",health_status="Healthy",sync_status="OutOfSync"}'
+        values: '1x40'
+      - series: 'argocd_app_info{name="dev",health_status="Degraded",sync_status="OutOfSync"}'
+        values: '1x40'
+    alert_rule_test:
+      - { eval_time: 20m, alertname: ArgoCDProdOutOfSync, exp_alerts: [] }
+      - eval_time: 35m
+        alertname: ArgoCDProdOutOfSync
+        exp_alerts:
+          - exp_labels: { severity: critical, name: prod }
+            exp_annotations:
+              summary: "Argo CD application prod OutOfSync for 30 minutes"
+              description: "prod does not run what the prod branch says: a sync is stuck or refused (argocd app get prod)."
+      - { eval_time: 35m, alertname: ArgoCDProdUnhealthy, exp_alerts: [] }
+
+  # Review fixes: prod flips between Degraded and Unknown every 10 minutes and
+  # stays unhealthy: still fires after 30 minutes, once.
+  - interval: 1m
+    input_series:
+      - series: 'argocd_app_info{name="prod",health_status="Degraded",sync_status="Synced"}'
+        values: '1x9 _x10 1x9 _x10'
+      - series: 'argocd_app_info{name="prod",health_status="Unknown",sync_status="Synced"}'
+        values: '_x10 1x9 _x10 1x9'
+    alert_rule_test:
+      - { eval_time: 20m, alertname: ArgoCDProdUnhealthy, exp_alerts: [] }
+      - eval_time: 35m
+        alertname: ArgoCDProdUnhealthy
+        exp_alerts:
+          - exp_labels: { severity: critical, name: prod }
+            exp_annotations:
+              summary: "Argo CD application prod unhealthy for 30 minutes"
+              description: "Degraded, Missing or Unknown for 30 minutes (the health status may have changed in between: it is not part of the alert). On the Argo CD machine: kubectl -n argocd get application prod -o yaml (status.resources)."
+
+  # SiteDown reads the latest check: 2xx at 0, failing from 1m, fires at 3m
+  # (not at 2m). flaky: no 2xx and errors at 0 and 1m, 2xx again from 2m:
+  # neither SiteDown nor SiteUnreachable fires.
+  - interval: 1m
+    input_series:
+      - series: 'httpcheck_status{http_url="https://down.example",http_status_class="2xx"}'
+        values: '1 0x15'
+      - series: 'httpcheck_status{http_url="https://flaky.example",http_status_class="2xx"}'
+        values: '0 0 1x14'
+      - series: 'httpcheck_error{http_url="https://flaky.example",error_message="dial tcp: timeout"}'
+        values: '1 1'
+      - series: 'httpcheck_status{http_url="https://ok.example",http_status_class="2xx"}'
+        values: '1x15'
+    alert_rule_test:
+      - { eval_time: 2m, alertname: SiteDown, exp_alerts: [] }
+      - eval_time: 3m
+        alertname: SiteDown
+        exp_alerts:
+          - exp_labels: { severity: critical, http_url: "https://down.example" }
+            exp_annotations:
+              summary: "https://down.example does not answer 2xx"
+              description: "The external probe on the Argo CD machine gets no 2xx from https://down.example for 2 minutes."
+      - { eval_time: 15m, alertname: SiteDown, exp_alerts: [{ exp_labels: { severity: critical, http_url: "https://down.example" }, exp_annotations: { summary: "https://down.example does not answer 2xx", description: "The external probe on the Argo CD machine gets no 2xx from https://down.example for 2 minutes." } }] }
+      - { eval_time: 2m, alertname: SiteUnreachable, exp_alerts: [] }
+      - { eval_time: 3m, alertname: SiteUnreachable, exp_alerts: [] }
+
+  # SiteUnreachable: connection errors that go on fire after 2 minutes.
+  - interval: 1m
+    input_series:
+      - series: 'httpcheck_status{http_url="https://gone.example",http_status_class="2xx"}'
+        values: '0x10'
+      - series: 'httpcheck_error{http_url="https://gone.example",error_message="dial tcp: timeout"}'
+        values: '1x10'
+    alert_rule_test:
+      - { eval_time: 1m, alertname: SiteUnreachable, exp_alerts: [] }
+      - eval_time: 3m
+        alertname: SiteUnreachable
+        exp_alerts:
+          - exp_labels: { severity: critical, http_url: "https://gone.example" }
+            exp_annotations:
+              summary: "https://gone.example unreachable"
+              description: "The external probe cannot connect to https://gone.example (DNS, TLS or TCP error) for 2 minutes. An error still in the 2-minute window does not count once the latest check answered 2xx again."
+
+  # PostgresExporterSilent: pg_up seen, then gone: fires; never seen: silent.
+  - interval: 1m
+    input_series:
+      - series: 'pg_up'
+        values: '1x10'
+    alert_rule_test:
+      - { eval_time: 10m, alertname: PostgresExporterSilent, exp_alerts: [] }
+      - eval_time: 20m
+        alertname: PostgresExporterSilent
+        exp_alerts:
+          - exp_labels: { severity: critical, env: dev }
+            exp_annotations:
+              summary: "No pg_up from the postgres_exporter of dev for 5 minutes"
+              description: "postgres_exporter of dev sent pg_up in the last 7 days but nothing for 5 minutes: the exporter or its scrape is down, so PostgresDown can no longer see the database (kubectl -n mairie360-dev get pods). Instances that never ran the exporter do not fire."
+      - { eval_time: 20m, alertname: PostgresDown, exp_alerts: [] }
+
+  - interval: 1m
+    input_series:
+      - series: 'k8s_node_cpu_usage'
+        values: '1x20'
+    alert_rule_test:
+      - { eval_time: 20m, alertname: PostgresExporterSilent, exp_alerts: [] }
+
+  # The site answered 200 then breaks at the transport level: the scraper
+  # moves to the http_status_code="0" series and the 200 one stops without a
+  # staleness marker. Both alerts still fire 2 minutes after the first error.
+  - interval: 1m
+    input_series:
+      - series: 'httpcheck_status{http_url="https://cut.example",http_status_code="200",http_status_class="2xx"}'
+        values: '1 1 _x14'
+      - series: 'httpcheck_status{http_url="https://cut.example",http_status_code="0",http_status_class="2xx"}'
+        values: '_ _ 0x14'
+      - series: 'httpcheck_error{http_url="https://cut.example",error_message="dial tcp: connection refused"}'
+        values: '_ _ 1x14'
+    alert_rule_test:
+      - { eval_time: 3m, alertname: SiteDown, exp_alerts: [] }
+      - eval_time: 4m
+        alertname: SiteDown
+        exp_alerts:
+          - exp_labels: { severity: critical, http_url: "https://cut.example" }
+            exp_annotations:
+              summary: "https://cut.example does not answer 2xx"
+              description: "The external probe on the Argo CD machine gets no 2xx from https://cut.example for 2 minutes."
+      - eval_time: 4m
+        alertname: SiteUnreachable
+        exp_alerts:
+          - exp_labels: { severity: critical, http_url: "https://cut.example" }
+            exp_annotations:
+              summary: "https://cut.example unreachable"
+              description: "The external probe cannot connect to https://cut.example (DNS, TLS or TCP error) for 2 minutes. An error still in the 2-minute window does not count once the latest check answered 2xx again."
