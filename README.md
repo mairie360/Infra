@@ -18,7 +18,8 @@ here and applied.
 bootstrap/            state bucket mairie360-tfstate (versioned, private)
 iam/                  IAM applications of the CI (MAIR-803) and of each bucket, bucket policies (MAIR-619), applied from a workstation only
 modules/instance/     resources of one instance: vault secrets, machine, buckets, Cockpit data sources
-modules/machine/      one machine: server + routed IPv4 + routed IPv6
+modules/machine/      one machine: server + routed IPv4 + routed IPv6 + security group (public ports)
+modules/dns/          public names of one instance: <host>.<env>.<zone> -> its machine
 modules/naming/       bucket and vault names shared by orgs/ and iam/
 orgs/mairie360/       group mairie360: instances dev, staging, prod, Argo CD machine
 scripts/tf.sh         terraform in one root, S3 backend credentials from the scw profile
@@ -60,6 +61,57 @@ scripts/tf.sh orgs/mairie360 output -json ansible_hosts > /tmp/hosts.json
 # in mairie360/ansible:
 scripts/inventory-from-terraform.py --org mairie360 /tmp/hosts.json
 ```
+
+### Tiers
+
+An instance machine is sized by its **tier** (`instances.<env>.machine.tier` of
+`terraform.tfvars`, table `local.tiers` of `modules/instance/main.tf`):
+
+| Tier | Type | Root volume |
+| --- | --- | --- |
+| `small` | `POP2-2C-8G` | 30 GB (dev, staging, prod today) |
+| `medium` | `POP2-4C-16G` | 60 GB |
+| `large` | `POP2-8C-32G` | 120 GB |
+
+`type` and `root_volume_size_gb` override the tier. Moving up a tier resizes the
+machine in place (stop, change, start: plan it in a maintenance window). The
+volume can only grow: moving down would ask for the smaller tier's size and
+fail, so keep the current size explicitly first (for example `tier = "small"`
+with `root_volume_size_gb = 120`). Growing the volume needs Block Storage write
+rights, which the CI keys do not have (the only write set is full access):
+apply a tier change from a workstation (`scripts/tf.sh orgs/<org> apply`).
+
+### Security groups
+
+Each machine gets its own security group (`public_ports` of `modules/machine`):
+inbound dropped by default, stateful, outbound open (SMTP blocked by Scaleway's
+default security, e-mail goes through the Resend API). The ports are the ones
+`mairie360/ansible` opens in ufw, the group is a second layer in front of it:
+
+| Machine | Open |
+| --- | --- |
+| instance | TCP 22, 80, 443 |
+| Argo CD (WireGuard hub) | TCP 22, UDP 51820 |
+| n8n | TCP 22, 80, 443 |
+
+k3s (6443) is never public: the module refuses it, Argo CD reaches it through
+the tunnel. When ansible closes public SSH (`wireguard_close_public_ssh`), drop
+22 from the instances here too. Attaching a group is done in place, without a
+restart; apply it on dev first and check SSH, the sites and the tunnel.
+
+### DNS
+
+`modules/dns` names every Ingress host of an instance (`login`, `project`,
+`calendar`, `message`, `dashboard`, `settings`, `elearning`, `admin`, `auth`)
+`<host>.<env>.<dns_zone>`, pointing to the IPv4 of the instance's own machine;
+`n8n.<dns_zone>` follows the n8n machine, `extra_records` holds the rest (mail,
+verifications). Everything is off while `dns_zone` is null: `mairie360-eip.fr`
+is still served by o2switch. To switch: create the zone in Scaleway Domains,
+copy the records Terraform does not manage into `extra_records` (Resend
+DKIM/SPF/MX first, with `priority` on the MX records), apply from a
+workstation (the CI keys only read DNS records: the Domains write set is full
+access; apply `iam/` first so they can read them), then move the name servers
+at the registrar.
 
 ## Backup buckets (MAIR-618)
 

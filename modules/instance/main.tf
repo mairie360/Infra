@@ -53,14 +53,27 @@ resource "scaleway_secret" "vault" {
   }
 }
 
-# The machine of the instance (MAIR-637): imported when it already exists
+# Sizes of an instance machine, chosen per client by its tier (the number of
+# agents of the mairie). small is what dev, staging and prod run today. The
+# root volume can only grow: a tier change upwards resizes in place.
+locals {
+  tiers = {
+    small  = { type = "POP2-2C-8G", root_volume_size_gb = 30 }
+    medium = { type = "POP2-4C-16G", root_volume_size_gb = 60 }
+    large  = { type = "POP2-8C-32G", root_volume_size_gb = 120 }
+  }
+  tier = var.machine.tier == null ? null : local.tiers[var.machine.tier]
+}
+
+# The machine of the instance: imported when it already exists
 # (orgs/<org>/imports.tf), created otherwise.
 module "machine" {
   source = "../machine"
 
   name                = coalesce(var.machine.name, "${var.org_id}-${var.env_name}")
-  type                = var.machine.type
-  root_volume_size_gb = var.machine.root_volume_size_gb
+  type                = coalesce(var.machine.type, try(local.tier.type, null))
+  root_volume_size_gb = coalesce(var.machine.root_volume_size_gb, try(local.tier.root_volume_size_gb, null))
   project_id          = var.project_id
   tags                = [var.org_id, var.env_name]
+  public_ports        = var.public_ports
 }

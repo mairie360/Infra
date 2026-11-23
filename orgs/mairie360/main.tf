@@ -21,6 +21,8 @@ module "argocd" {
   root_volume_size_gb = var.argocd_machine.root_volume_size_gb
   project_id          = var.project_id
   tags                = [var.org_id, "argocd"]
+  # SSH, and the WireGuard server every instance of the group connects to.
+  public_ports = { tcp = [22], udp = [51820] }
 }
 
 # The machine running n8n, made in the console before this repository and adopted
@@ -36,4 +38,6 @@ module "n8n" {
   root_volume_size_gb = var.n8n_machine.root_volume_size_gb
   project_id          = var.project_id
   tags                = ["n8n"]
+  # n8n_node_public_ports of mairie360/ansible.
+  public_ports = { tcp = [22, 80, 443] }
 }

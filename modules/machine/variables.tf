@@ -46,3 +46,22 @@ variable "tags" {
   type        = list(string)
   default     = []
 }
+
+variable "public_ports" {
+  description = "Ports open to the Internet (security group of the machine), the ones mairie360/ansible opens in ufw. null = no group, the project's default one applies."
+  type = object({
+    tcp = list(number)
+    udp = optional(list(number), [])
+  })
+  default = null
+
+  validation {
+    condition     = var.public_ports == null ? true : alltrue([for p in concat(var.public_ports.tcp, var.public_ports.udp) : p >= 1 && p <= 65535 && floor(p) == p])
+    error_message = "public_ports are port numbers (1-65535)."
+  }
+
+  validation {
+    condition     = var.public_ports == null ? true : !contains(var.public_ports.tcp, 6443)
+    error_message = "6443 (k3s API, cluster-admin) is only reachable through the WireGuard tunnel, never public."
+  }
+}
