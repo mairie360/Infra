@@ -34,6 +34,8 @@ variable "extra_records" {
     type = string
     data = string
     ttl  = optional(number, 3600)
+    # MX (and SRV) only: Scaleway sends it apart from data.
+    priority = optional(number)
   }))
   default = {}
 }

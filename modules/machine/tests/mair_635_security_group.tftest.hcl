@@ -82,3 +82,21 @@ run "k3s_is_never_public" {
 
   expect_failures = [var.public_ports]
 }
+
+run "public_ports_are_open_over_ipv4_and_ipv6" {
+  command = apply
+
+  variables {
+    public_ports = { tcp = [22, 443], udp = [51820] }
+  }
+
+  assert {
+    condition = toset([
+      for r in scaleway_instance_security_group.this[0].inbound_rule : "${r.protocol}/${r.port}/${r.ip_range}" if r.protocol != "ICMP"
+      ]) == toset([
+      "TCP/22/0.0.0.0/0", "TCP/22/::/0", "TCP/443/0.0.0.0/0", "TCP/443/::/0",
+      "UDP/51820/0.0.0.0/0", "UDP/51820/::/0",
+    ])
+    error_message = "A rule without ip_range is IPv4 only: every public port is opened on both families."
+  }
+}

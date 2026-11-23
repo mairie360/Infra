@@ -74,8 +74,10 @@ An instance machine is sized by its **tier** (`instances.<env>.machine.tier` of
 | `large` | `POP2-8C-32G` | 120 GB |
 
 `type` and `root_volume_size_gb` override the tier. Moving up a tier resizes the
-machine in place (stop, change, start: plan it in a maintenance window); the
-volume can only grow, so moving down only changes the type.
+machine in place (stop, change, start: plan it in a maintenance window). The
+volume can only grow: moving down would ask for the smaller tier's size and
+fail, so keep the current size explicitly first (for example `tier = "small"`
+with `root_volume_size_gb = 120`).
 
 ### Security groups
 
@@ -104,7 +106,7 @@ restart; apply it on dev first and check SSH, the sites and the tunnel.
 verifications). Everything is off while `dns_zone` is null: `mairie360-eip.fr`
 is still served by o2switch. To switch: create the zone in Scaleway Domains,
 copy the records Terraform does not manage into `extra_records` (Resend
-DKIM/SPF/MX first), apply, then move the name servers at the registrar.
+DKIM/SPF/MX first, with `priority` on the MX records), apply, then move the name servers at the registrar.
 
 ## Backup buckets (MAIR-618)
 

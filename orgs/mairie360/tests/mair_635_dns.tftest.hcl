@@ -81,3 +81,21 @@ run "names_follow_the_template" {
     error_message = "n8n.<zone> follows its machine; extra records are created as given."
   }
 }
+
+run "mx_records_keep_their_priorities" {
+  command = apply
+
+  variables {
+    dns_zone = "example.test"
+    extra_records = {
+      mx_primary = { name = "", type = "MX", data = "mx1.example.test.", priority = 10 }
+      mx_backup  = { name = "", type = "MX", data = "mx2.example.test.", priority = 20 }
+      verify     = { name = "_verify", type = "TXT", data = "token" }
+    }
+  }
+
+  assert {
+    condition     = scaleway_domain_record.extra["mx_primary"].priority == 10 && scaleway_domain_record.extra["mx_backup"].priority == 20
+    error_message = "A primary/backup MX pair keeps its order: priority goes to the record."
+  }
+}

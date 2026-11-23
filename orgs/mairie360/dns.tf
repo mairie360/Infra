@@ -33,6 +33,7 @@ resource "scaleway_domain_record" "extra" {
   type     = each.value.type
   data     = each.value.data
   ttl      = each.value.ttl
+  priority = each.value.priority
 
   lifecycle {
     prevent_destroy = true

@@ -27,6 +27,12 @@ resource "scaleway_instance_ip" "v6" {
   }
 }
 
+locals {
+  # A rule without ip_range only covers IPv4 (0.0.0.0/0): every public port is
+  # opened on both families, so a machine with an IPv6 address answers on it.
+  public_ranges = ["0.0.0.0/0", "::/0"]
+}
+
 # Public ports of the machine, in front of its ufw (mairie360/ansible opens the
 # same ones): inbound dropped by default, stateful (answers and outbound
 # connections such as WireGuard to the hub pass), outbound open. Not created
@@ -45,20 +51,22 @@ resource "scaleway_instance_security_group" "this" {
   enable_default_security = true
 
   dynamic "inbound_rule" {
-    for_each = var.public_ports.tcp
+    for_each = [for pair in setproduct(var.public_ports.tcp, local.public_ranges) : { port = pair[0], ip_range = pair[1] }]
     content {
       action   = "accept"
       protocol = "TCP"
-      port     = inbound_rule.value
+      port     = inbound_rule.value.port
+      ip_range = inbound_rule.value.ip_range
     }
   }
 
   dynamic "inbound_rule" {
-    for_each = var.public_ports.udp
+    for_each = [for pair in setproduct(var.public_ports.udp, local.public_ranges) : { port = pair[0], ip_range = pair[1] }]
     content {
       action   = "accept"
       protocol = "UDP"
-      port     = inbound_rule.value
+      port     = inbound_rule.value.port
+      ip_range = inbound_rule.value.ip_range
     }
   }
 
