@@ -19,6 +19,19 @@ e-mails `alert_emails` (MAIR-623).
 installed, validates them and runs the unit tests of `tests/promtool/` (each
 alert fires above its threshold and not under it):
 
+The files hold bare groups, so `promtool` cannot read them as they are: the
+runner wraps each one in a `groups:` list (and replaces `__ENV__` by `dev`)
+before calling it. With `promtool` on the `PATH`:
+
 ```bash
-docker run --rm --entrypoint promtool -v "$PWD:/r" -w /r prom/prometheus:v3.5.0 check rules …
+python3 -m unittest tests.test_alert_rules -v
+```
+
+Without it, put the `promtool` of the Prometheus image on the `PATH` first:
+
+```bash
+docker create --name promtool prom/prometheus:v3.5.0 >/dev/null
+mkdir -p .bin && docker cp promtool:/bin/promtool .bin/ && docker rm promtool >/dev/null
+PATH="$PWD/.bin:$PATH" python3 -m unittest tests.test_alert_rules -v
+rm -rf .bin && docker image rm prom/prometheus:v3.5.0
 ```

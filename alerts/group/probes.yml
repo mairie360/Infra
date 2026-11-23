@@ -9,7 +9,7 @@ rules:
   - alert: SiteDown
     expr: >-
       max by (http_url) (
-        max_over_time({__name__=~"httpcheck_status(_ratio)?", http_status_class="2xx"}[2m])
+        {__name__=~"httpcheck_status(_ratio)?", http_status_class="2xx"}
       ) < 1
     for: 2m
     labels:
@@ -22,9 +22,17 @@ rules:
 
   - alert: SiteUnreachable
     expr: >-
-      max by (http_url) (
-        max_over_time({__name__=~"httpcheck_error(_total)?"}[2m])
-      ) > 0
+      (
+        max by (http_url) (
+          max_over_time({__name__=~"httpcheck_error(_total)?"}[2m])
+        ) > 0
+      )
+      unless on (http_url)
+      (
+        max by (http_url) (
+          {__name__=~"httpcheck_status(_ratio)?", http_status_class="2xx"}
+        ) >= 1
+      )
     for: 2m
     labels:
       severity: critical
@@ -32,7 +40,8 @@ rules:
       summary: "{{ $labels.http_url }} unreachable"
       description: >-
         The external probe cannot connect to {{ $labels.http_url }} (DNS,
-        TLS or TCP error) for 2 minutes.
+        TLS or TCP error) for 2 minutes. An error still in the 2-minute window
+        does not count once the latest check answered 2xx again.
 
   - alert: ProbeSilent
     expr: absent_over_time({__name__=~"httpcheck_duration(_milliseconds)?"}[15m])

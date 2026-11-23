@@ -6,16 +6,17 @@ interval: 1m
 rules:
   - alert: ArgoCDProdUnhealthy
     expr: >-
-      max by (name, health_status) (
+      max by (name) (
         {__name__="argocd_app_info", name=~"prod|.+-prod", health_status=~"Degraded|Missing|Unknown"}
       ) > 0
     for: 30m
     labels:
       severity: critical
     annotations:
-      summary: "Argo CD application {{ $labels.name }} is {{ $labels.health_status }}"
+      summary: "Argo CD application {{ $labels.name }} unhealthy for 30 minutes"
       description: >-
-        For 30 minutes. On the Argo CD machine:
+        Degraded, Missing or Unknown for 30 minutes (the health status may have
+        changed in between: it is not part of the alert). On the Argo CD machine:
         kubectl -n argocd get application {{ $labels.name }} -o yaml (status.resources).
 
   - alert: ArgoCDProdOutOfSync

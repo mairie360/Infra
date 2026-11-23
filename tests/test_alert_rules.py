@@ -80,7 +80,7 @@ class RuleFiles(unittest.TestCase):
         self.assertEqual(set(alerts), {
             "DiskAlmostFull", "MemoryHigh", "ContainerCrashLooping", "ContainerOOMKilled",
             "CertificateExpiresSoon", "HighErrorRate", "PostgresConnectionsHigh", "PostgresDown",
-            "InstanceMetricsSilent"})
+            "PostgresExporterSilent", "InstanceMetricsSilent"})
         self.assertIn("> 0.8", alerts["DiskAlmostFull"]["expr"])
         self.assertIn("> 0.9", alerts["MemoryHigh"]["expr"])
         self.assertEqual(alerts["MemoryHigh"]["for"], "10m")
