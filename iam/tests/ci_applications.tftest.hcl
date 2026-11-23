@@ -114,6 +114,17 @@ run "apply_key_manages_machines_without_delete" {
     error_message = "No machine, IP or volume deletion, snapshot, image change or console access for the CI."
   }
 
+  # Updating a server (e.g. attaching its security group) lists its private
+  # network interfaces: the first CI apply of the security groups failed with
+  # "insufficient permissions: list private_network_interface".
+  assert {
+    condition = alltrue([
+      for s in ["InstancesPrivateNetworkInterfaceList", "InstancesPrivateNetworkInterfaceRead"] :
+      contains(one(scaleway_iam_policy.ci["ci-terraform-apply"].rule).permission_set_names, s)
+    ])
+    error_message = "The apply key reads the private network interfaces of the machines it updates."
+  }
+
   assert {
     condition     = contains(one(scaleway_iam_policy.ci["ci-terraform-plan"].rule).permission_set_names, "InstancesReadOnly")
     error_message = "The plan key reads the machines it plans."
