@@ -48,6 +48,9 @@ locals {
         "InstancesVolumeRead",
         "InstancesVolumeList",
         "InstancesVolumeCreate",
+        # Read on every server update (e.g. attaching its security group).
+        "InstancesPrivateNetworkInterfaceList",
+        "InstancesPrivateNetworkInterfaceRead",
         # The machines' system volumes are Block Storage volumes, read on every refresh
         # (the first CI plan failed with "read volume").
         "BlockStorageReadOnly",
