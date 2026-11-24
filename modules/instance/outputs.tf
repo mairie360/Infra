@@ -28,11 +28,13 @@ output "elearning_bucket" {
   value       = scaleway_object_bucket.elearning.name
 }
 
+# Built from the base url: push_url already ends with a push path
+# (/api/v1/push for metrics, /otlp/v1/traces for traces).
 output "cockpit_endpoints" {
   description = "OTLP push URLs of the instance's Cockpit data sources (observability.cockpit.* of the Deploiment values)."
   value = {
-    metricsEndpoint = "${trimsuffix(scaleway_cockpit_source.metrics.push_url, "/")}/otlp/v1/metrics"
-    tracesEndpoint  = "${trimsuffix(scaleway_cockpit_source.traces.push_url, "/")}/otlp/v1/traces"
+    metricsEndpoint = "${trimsuffix(scaleway_cockpit_source.metrics.url, "/")}/otlp/v1/metrics"
+    tracesEndpoint  = "${trimsuffix(scaleway_cockpit_source.traces.url, "/")}/otlp/v1/traces"
   }
 }
 

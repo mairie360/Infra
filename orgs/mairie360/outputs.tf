@@ -45,7 +45,7 @@ output "alert_manager_url" {
 output "probes" {
   description = "External probe of the group (MAIR-621): push endpoint for role hub_probe, ruler URL, vault path of its token."
   value = {
-    metrics_endpoint = "${trimsuffix(scaleway_cockpit_source.probes.push_url, "/")}/otlp/v1/metrics"
+    metrics_endpoint = "${trimsuffix(scaleway_cockpit_source.probes.url, "/")}/otlp/v1/metrics"
     metrics_url      = scaleway_cockpit_source.probes.url
     vault_path       = scaleway_secret.hub_cockpit_token.path
   }

@@ -2,7 +2,8 @@
 mock_provider "scaleway" {
   mock_resource "scaleway_cockpit_source" {
     defaults = {
-      push_url = "https://abcd.metrics.cockpit.fr-par.scw.cloud"
+      # What Scaleway returns: push_url already holds a push path.
+      push_url = "https://abcd.metrics.cockpit.fr-par.scw.cloud/api/v1/push"
       url      = "https://abcd.metrics.cockpit.fr-par.scw.cloud"
     }
   }
