@@ -7,6 +7,7 @@ curl and scripts/tf.sh are stubbed: nothing reaches Scaleway.
 
 import os
 import pathlib
+import re
 import shutil
 import subprocess
 import tempfile
@@ -27,9 +28,24 @@ class RuleFiles(unittest.TestCase):
             self.assertIsInstance(group.get("name"), str, path)
             self.assertNotIn("groups", group, f"{path}: one group per file, no top list")
             for rule in group["rules"]:
-                self.assertTrue(rule.get("alert") and rule.get("expr"), path)
+                self.assertTrue(rule.get("expr"), path)
+                if "record" in rule:  # carries a value past the ruler's 1 h range limit
+                    self.assertRegex(rule["record"], r"^mairie360:", path)
+                    continue
+                self.assertTrue(rule.get("alert"), path)
                 self.assertEqual(rule["labels"]["severity"], "critical", path)
                 self.assertIn("summary", rule["annotations"], path)
+
+    def test_mair_628_no_range_over_the_cockpit_ruler_limit(self):
+        """The Cockpit ruler refuses any range selector over 1 h ("matrix selector
+        range 8h0m0s exceeds maximum allowed limit of 1h0m0s"): one such rule
+        makes the whole namespace fail to push."""
+        unit = {"s": 1, "m": 60, "h": 3600, "d": 86400, "w": 604800}
+        for path in RULE_FILES:
+            for rule in yaml.safe_load(path.read_text())["rules"]:
+                for amount, u in re.findall(r"\[(\d+)([smhdw])(?::[^\]]*)?\]", rule["expr"]):
+                    self.assertLessEqual(int(amount) * unit[u], 3600,
+                                         f"{path.name}: {rule.get('alert') or rule.get('record')} uses [{amount}{u}]")
 
     def test_promtool_accepts_them(self):
         if not shutil.which("promtool"):
@@ -65,29 +81,35 @@ class RuleFiles(unittest.TestCase):
         """MAIR-622: a failed night and a CronJob that never reports both alert."""
         group = yaml.safe_load((REPO / "alerts/instance/backups.yml").read_text().replace("__ENV__", "prod"))
         self.assertEqual(group["name"], "backups-prod")
-        rule = group["rules"][0]
-        self.assertEqual(rule["alert"], "BackupMissed")
-        self.assertIn("> 25200", rule["expr"], "7 h: one run every 6 h plus margin")
-        self.assertIn("[8h]", rule["expr"])
-        self.assertIn("absent_over_time", rule["expr"])
-        self.assertIn("mairie360_backup_last_success_timestamp_seconds", rule["expr"],
+        rules = {r.get("record") or r["alert"] + ("/never" if "absent" in r["expr"] else ""): r for r in group["rules"]}
+        latest = "mairie360:backup_last_success_timestamp_seconds:latest"
+        self.assertIn("mairie360_backup_last_success_timestamp_seconds", rules[latest]["expr"],
                       "the metric Deploiment charts/backup pushes")
-        self.assertEqual(rule["labels"]["env"], "prod")
+        self.assertIn("> 25200", rules["BackupMissed"]["expr"], "7 h: one run every 6 h plus margin")
+        self.assertIn(latest, rules["BackupMissed"]["expr"])
+        self.assertEqual(rules["BackupMissed/never"]["for"], "7h", "a CronJob that never reports alerts too")
+        for name in ("BackupMissed", "BackupMissed/never"):
+            self.assertEqual(rules[name]["labels"]["env"], "prod")
 
     def test_mair_631_a_missed_or_slow_restore_test_alerts(self):
-        alerts = {r["alert"]: r for r in yaml.safe_load((REPO / "alerts/instance/backups.yml").read_text())["rules"]}
-        missed = alerts["RestoreTestMissed"]["expr"]
-        self.assertIn("mairie360_restore_test_last_success_timestamp_seconds", missed)
-        self.assertIn("> 691200", missed, "8 days: one weekly test plus margin")
-        self.assertIn("absent_over_time", missed, "a test that never reported must alert too")
-        slow = alerts["RestoreTooSlow"]["expr"]
-        self.assertIn("mairie360_restore_test_duration_seconds", slow)
+        rules = yaml.safe_load((REPO / "alerts/instance/backups.yml").read_text())["rules"]
+        missed = [r for r in rules if r.get("alert") == "RestoreTestMissed"]
+        self.assertIn("> 691200", missed[0]["expr"], "8 days: one weekly test plus margin")
+        self.assertIn("mairie360:restore_test_last_success_timestamp_seconds:latest", missed[0]["expr"])
+        self.assertEqual([r["for"] for r in missed if "absent" in r["expr"]], ["8d"],
+                         "a test that never reported must alert too")
+        slow = next(r for r in rules if r.get("alert") == "RestoreTooSlow")["expr"]
+        self.assertIn("mairie360:restore_test_duration_seconds:latest", slow)
         self.assertIn("> 3600", slow, "the database restore must leave room in the 2 h RTO")
+        records = {r["record"]: r["expr"] for r in rules if "record" in r}
+        self.assertIn("mairie360_restore_test_last_success_timestamp_seconds",
+                      records["mairie360:restore_test_last_success_timestamp_seconds:latest"])
+        self.assertIn("mairie360_restore_test_duration_seconds", records["mairie360:restore_test_duration_seconds:latest"])
 
     def test_mair_628_instance_rules_cover_the_agreed_thresholds(self):
         group = yaml.safe_load((REPO / "alerts/instance/platform.yml").read_text().replace("__ENV__", "prod"))
         self.assertEqual(group["name"], "platform-prod")
-        alerts = {r["alert"]: r for r in group["rules"]}
+        alerts = {r["alert"]: r for r in group["rules"] if "alert" in r}
         self.assertEqual(set(alerts), {
             "DiskAlmostFull", "MemoryHigh", "ContainerCrashLooping", "ContainerOOMKilled",
             "CertificateExpiresSoon", "HighErrorRate", "PostgresConnectionsHigh", "PostgresDown",
@@ -105,7 +127,7 @@ class RuleFiles(unittest.TestCase):
         self.assertIn("> 0.8", alerts["PostgresConnectionsHigh"]["expr"])
         self.assertIn("absent_over_time", alerts["InstanceMetricsSilent"]["expr"],
                       "a dead collector must alert, or every other instance alert is blind")
-        for rule in group["rules"]:
+        for rule in alerts.values():
             self.assertEqual(rule["labels"]["env"], "prod", rule["alert"])
 
     def test_mair_628_argocd_prod_degraded_or_out_of_sync_for_30_minutes(self):

@@ -37,3 +37,45 @@ tests:
             exp_annotations:
               summary: "Restoring the database of dev takes more than 1 h"
               description: "The last restore test took 1h 30m 0s: with the machine rebuild, the 2 h RTO is no longer met. Grow the restore Job's resources or the machine, or review the RTO."
+
+  # The weekly test pushes once: its success and duration are still known a
+  # week later (the ruler refuses ranges over 1 h), then RestoreTestMissed.
+  - interval: 1h
+    input_series:
+      - series: 'mairie360_restore_test_last_success_timestamp_seconds'
+        values: '0 _x240'
+      - series: 'mairie360_restore_test_duration_seconds'
+        values: '5400 _x240'
+      - series: 'mairie360_backup_last_success_timestamp_seconds'
+        values: '0+3600x240'
+    alert_rule_test:
+      - { eval_time: 7d, alertname: RestoreTestMissed, exp_alerts: [] }
+      - eval_time: 7d
+        alertname: RestoreTooSlow
+        exp_alerts:
+          - exp_labels: { severity: critical, env: dev }
+            exp_annotations:
+              summary: "Restoring the database of dev takes more than 1 h"
+              description: "The last restore test took 1h 30m 0s: with the machine rebuild, the 2 h RTO is no longer met. Grow the restore Job's resources or the machine, or review the RTO."
+      - eval_time: 8d2h
+        alertname: RestoreTestMissed
+        exp_alerts:
+          - exp_labels: { severity: critical, env: dev }
+            exp_annotations:
+              summary: "No successful restore test of dev for more than 8 days"
+              description: "Check the last Job (kubectl -n mairie360-dev get jobs | grep restore-test) and its logs: a dump that no longer loads is a backup that cannot be restored (Deploiment charts/backup/README.md, Weekly restore test)."
+
+  # A restore test that never reported: silent for 8 days, then RestoreTestMissed.
+  - interval: 1h
+    input_series:
+      - series: 'mairie360_backup_last_success_timestamp_seconds'
+        values: '0+3600x240'
+    alert_rule_test:
+      - { eval_time: 7d, alertname: RestoreTestMissed, exp_alerts: [] }
+      - eval_time: 8d2h
+        alertname: RestoreTestMissed
+        exp_alerts:
+          - exp_labels: { severity: critical, env: dev }
+            exp_annotations:
+              summary: "No successful restore test of dev for more than 8 days"
+              description: "Check the last Job (kubectl -n mairie360-dev get jobs | grep restore-test) and its logs: a dump that no longer loads is a backup that cannot be restored (Deploiment charts/backup/README.md, Weekly restore test)."

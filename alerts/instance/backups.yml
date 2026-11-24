@@ -4,15 +4,52 @@
 # instance (Deploiment charts/backup) pushes the time of that success to the
 # instance's collector: mairie360_backup_last_success_timestamp_seconds.
 # The CronJob runs every 6 h: no success for 7 h means the last run failed or
-# never ran, and so does no value at all for 8 h.
+# never ran.
+#
+# The jobs push their value once per run, but the Cockpit ruler refuses any
+# range over 1 h: a recording rule carries the last value forward
+# (`m:latest` reads `m` of the last hour, else its own last value), and the
+# alerts read only `m:latest`. "Never reported" is `absent(m:latest)` held by
+# `for:`; it also covers a ruler down for more than 1 h, which drops the
+# carried value until the next run.
 name: backups-__ENV__
 interval: 5m
 rules:
-  - alert: BackupMissed
+  - record: mairie360:backup_last_success_timestamp_seconds:latest
     expr: >-
-      (time() - max(max_over_time({__name__=~"mairie360_backup_last_success_timestamp_seconds"}[8h])) > 25200)
+      max(max_over_time({__name__=~"mairie360_backup_last_success_timestamp_seconds"}[1h]))
       or
-      absent_over_time({__name__=~"mairie360_backup_last_success_timestamp_seconds"}[8h])
+      max(last_over_time(mairie360:backup_last_success_timestamp_seconds:latest[1h]))
+
+  - record: mairie360:restore_test_last_success_timestamp_seconds:latest
+    expr: >-
+      max(max_over_time({__name__=~"mairie360_restore_test_last_success_timestamp_seconds"}[1h]))
+      or
+      max(last_over_time(mairie360:restore_test_last_success_timestamp_seconds:latest[1h]))
+
+  - record: mairie360:restore_test_duration_seconds:latest
+    expr: >-
+      max(max_over_time({__name__=~"mairie360_restore_test_duration_seconds"}[1h]))
+      or
+      max(last_over_time(mairie360:restore_test_duration_seconds:latest[1h]))
+
+  - alert: BackupMissed
+    expr: time() - mairie360:backup_last_success_timestamp_seconds:latest > 25200
+    labels:
+      severity: critical
+      env: __ENV__
+    annotations:
+      summary: "No successful backup of __ENV__ for more than 7 h"
+      description: >-
+        The backup CronJob of __ENV__ (every 6 h) reported no success for
+        7 h: check its last Job (kubectl -n mairie360-__ENV__ get jobs),
+        the bucket key and the restic repository (Deploiment
+        charts/backup/README.md).
+
+  # Same alert when no success was reported at all for 7 h.
+  - alert: BackupMissed
+    expr: absent(mairie360:backup_last_success_timestamp_seconds:latest)
+    for: 7h
     labels:
       severity: critical
       env: __ENV__
@@ -28,11 +65,22 @@ rules:
   # newest backup into a throwaway Postgres. No success for 8 days: last
   # Sunday's test failed or never ran, so nothing proves the backups restore.
   - alert: RestoreTestMissed
-    expr: >-
-      (time() - max(max_over_time({__name__=~"mairie360_restore_test_last_success_timestamp_seconds"}[9d])) > 691200)
-      or
-      absent_over_time({__name__=~"mairie360_restore_test_last_success_timestamp_seconds"}[9d])
+    expr: time() - mairie360:restore_test_last_success_timestamp_seconds:latest > 691200
     for: 30m
+    labels:
+      severity: critical
+      env: __ENV__
+    annotations:
+      summary: "No successful restore test of __ENV__ for more than 8 days"
+      description: >-
+        Check the last Job (kubectl -n mairie360-__ENV__ get jobs | grep restore-test)
+        and its logs: a dump that no longer loads is a backup that cannot be
+        restored (Deploiment charts/backup/README.md, Weekly restore test).
+
+  # Same alert when no restore test was reported at all for 8 days.
+  - alert: RestoreTestMissed
+    expr: absent(mairie360:restore_test_last_success_timestamp_seconds:latest)
+    for: 8d
     labels:
       severity: critical
       env: __ENV__
@@ -47,7 +95,7 @@ rules:
   # (Deploiment docs/*/disaster-recovery.md): above 1 h, the rest of the
   # rebuild no longer fits.
   - alert: RestoreTooSlow
-    expr: max(max_over_time({__name__=~"mairie360_restore_test_duration_seconds"}[8d])) > 3600
+    expr: mairie360:restore_test_duration_seconds:latest > 3600
     labels:
       severity: critical
       env: __ENV__
