@@ -166,7 +166,7 @@ tests:
           - exp_labels: { severity: critical, env: dev }
             exp_annotations:
               summary: "No pg_up from the postgres_exporter of dev for 5 minutes"
-              description: "postgres_exporter of dev sent pg_up in the last 7 days but nothing for 5 minutes: the exporter or its scrape is down, so PostgresDown can no longer see the database (kubectl -n mairie360-dev get pods). Instances that never ran the exporter do not fire."
+              description: "postgres_exporter of dev sent pg_up before but nothing for 5 minutes: the exporter or its scrape is down, so PostgresDown can no longer see the database (kubectl -n mairie360-dev get pods). Instances that never ran the exporter do not fire."
       - { eval_time: 20m, alertname: PostgresDown, exp_alerts: [] }
 
   - interval: 1m
@@ -218,3 +218,58 @@ tests:
             exp_annotations:
               summary: "No successful backup of dev for more than 7 h"
               description: "The backup CronJob of dev (every 6 h) reported no success for 7 h: check its last Job (kubectl -n mairie360-dev get jobs), the bucket key and the restic repository (Deploiment charts/backup/README.md)."
+
+  # The Cockpit ruler refuses ranges over 1 h: the backup CronJob pushes its
+  # success once per run, and the alert still knows it 6 h later (carried by
+  # the recording rule), then fires past 7 h.
+  - interval: 10m
+    input_series:
+      - series: 'mairie360_backup_last_success_timestamp_seconds'
+        values: '0 _x60'
+    alert_rule_test:
+      - { eval_time: 6h, alertname: BackupMissed, exp_alerts: [] }
+      - eval_time: 7h20m
+        alertname: BackupMissed
+        exp_alerts:
+          - exp_labels: { severity: critical, env: dev }
+            exp_annotations:
+              summary: "No successful backup of dev for more than 7 h"
+              description: "The backup CronJob of dev (every 6 h) reported no success for 7 h: check its last Job (kubectl -n mairie360-dev get jobs), the bucket key and the restic repository (Deploiment charts/backup/README.md)."
+
+  # A new success resets the clock: pushed at 0 and at 6 h, no alert at 8 h.
+  - interval: 10m
+    input_series:
+      - series: 'mairie360_backup_last_success_timestamp_seconds'
+        values: '0 _x35 21600 _x24'
+    alert_rule_test:
+      - { eval_time: 8h, alertname: BackupMissed, exp_alerts: [] }
+
+  # A CronJob that never reported: silent for 7 h, then BackupMissed.
+  - interval: 10m
+    input_series:
+      - series: 'k8s_node_cpu_usage'
+        values: '1x60'
+    alert_rule_test:
+      - { eval_time: 6h, alertname: BackupMissed, exp_alerts: [] }
+      - eval_time: 7h20m
+        alertname: BackupMissed
+        exp_alerts:
+          - exp_labels: { severity: critical, env: dev }
+            exp_annotations:
+              summary: "No successful backup of dev for more than 7 h"
+              description: "The backup CronJob of dev (every 6 h) reported no success for 7 h: check its last Job (kubectl -n mairie360-dev get jobs), the bucket key and the restic repository (Deploiment charts/backup/README.md)."
+
+  # pg_up seen for 10 minutes, then gone: still firing 3 h later, beyond the
+  # 1 h ranges the ruler allows.
+  - interval: 1m
+    input_series:
+      - series: 'pg_up'
+        values: '1x10 _x200'
+    alert_rule_test:
+      - eval_time: 3h
+        alertname: PostgresExporterSilent
+        exp_alerts:
+          - exp_labels: { severity: critical, env: dev }
+            exp_annotations:
+              summary: "No pg_up from the postgres_exporter of dev for 5 minutes"
+              description: "postgres_exporter of dev sent pg_up before but nothing for 5 minutes: the exporter or its scrape is down, so PostgresDown can no longer see the database (kubectl -n mairie360-dev get pods). Instances that never ran the exporter do not fire."

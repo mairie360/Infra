@@ -128,20 +128,28 @@ rules:
         pg_up is 0: the database pod is down or refuses connections
         (kubectl -n mairie360-__ENV__ get pods -l app.kubernetes.io/component=database).
 
+  # pg_up was seen on this instance, carried forward by its own last value: the
+  # Cockpit ruler refuses ranges over 1 h, so no present_over_time(...[7d]).
+  - record: mairie360:pg_up:seen
+    expr: >-
+      max(max_over_time({__name__="pg_up"}[1h])) * 0 + 1
+      or
+      max(last_over_time(mairie360:pg_up:seen[1h]))
+
   - alert: PostgresExporterSilent
     expr: >-
       absent_over_time({__name__="pg_up"}[5m])
       and on ()
-      count(present_over_time({__name__="pg_up"}[7d])) > 0
+      mairie360:pg_up:seen
     labels:
       severity: critical
       env: __ENV__
     annotations:
       summary: "No pg_up from the postgres_exporter of __ENV__ for 5 minutes"
       description: >-
-        postgres_exporter of __ENV__ sent pg_up in the last 7 days but nothing
-        for 5 minutes: the exporter or its scrape is down, so PostgresDown can
-        no longer see the database (kubectl -n mairie360-__ENV__ get pods).
+        postgres_exporter of __ENV__ sent pg_up before but nothing for 5
+        minutes: the exporter or its scrape is down, so PostgresDown can no
+        longer see the database (kubectl -n mairie360-__ENV__ get pods).
         Instances that never ran the exporter do not fire.
 
   - alert: InstanceMetricsSilent

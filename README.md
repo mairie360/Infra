@@ -232,7 +232,7 @@ the instance's collector, hence to `<org>-<env>-metrics`.
 `alerts/instance/backups.yml` (pushed to every instance by
 `scripts/push-alert-rules.sh`) raises `BackupMissed` when the last success is
 older than 7 h (the CronJob runs every 6 h), or when nothing was reported for
-8 h (a CronJob that never runs or cannot reach the collector). The same file
+7 h (a CronJob that never runs or cannot reach the collector). The same file
 alerts on the weekly restore test of the instance (`charts/backup`
 `restoreTest`): `RestoreTestMissed` after 8 days without a success, and
 `RestoreTooSlow` when restoring the database took more than 1 h (half of the

@@ -15,6 +15,13 @@ e-mails `alert_emails` (MAIR-623).
   rate at Traefik, Postgres connections, silent collector), from the series
   the instance's collector sends (Deploiment `charts/observability`).
 
+The Cockpit ruler refuses any range selector over 1 h (the whole namespace
+is then refused). A value pushed once per run (backups, restore test) is
+carried forward by a recording rule, `m:latest` = `m` of the last hour, else
+its own last value, and the alerts read `m:latest`; "never reported" is
+`absent(m:latest)` held by `for:`. `tests/test_alert_rules.py` refuses ranges
+over 1 h.
+
 `tests/test_alert_rules.py` checks the files and, when `promtool` is
 installed, validates them and runs the unit tests of `tests/promtool/` (each
 alert fires above its threshold and not under it):
