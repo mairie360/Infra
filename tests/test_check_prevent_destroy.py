@@ -121,9 +121,6 @@ class PreventDestroy(unittest.TestCase):
         self.assertEqual(check.main([str(f) for f in files]), 0)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
 
 SERVER = 'resource "scaleway_instance_server" "source" {\n  count = 1\n}\n'
 
@@ -157,3 +154,7 @@ class Exemption(unittest.TestCase):
 
     def test_mair_1185_repository_passes(self):
         self.assertEqual(check.main([]), 0)
+
+
+if __name__ == "__main__":
+    unittest.main()
