@@ -20,7 +20,11 @@ rebuilt from scratch; secrets are created here and filled by `mairie360/ansible`
   Cockpit has no finer write set, MAIR-620), the plan
   key read-only; a new resource type in `orgs/` may need a new permission set in `iam/`.
 - Every resource sets `lifecycle { prevent_destroy = true }`
-  (`tests/check_prevent_destroy.py`, no exemption); secrets also set `protected = true`.
+  (`tests/check_prevent_destroy.py`); secrets also set `protected = true`. One named
+  exemption (`EXEMPT` in the check): the server of `attack-source/`, the disposable source of
+  the external attack campaigns (MAIR-1185), created with `enabled = true` for a window and
+  destroyed with `enabled = false`, from a workstation only. Its reserved IP and security
+  group stay protected.
 - The vault secret names and the `/<org>/<env>` path are a contract with role
   `k8s_instance_secrets` of `ansible` (`vault_entries`, `vault_path`).
 - CI: `.github/workflows/cicd.yml` calls `terraform_cicd.yml` of `mairie360/CICD` pinned by

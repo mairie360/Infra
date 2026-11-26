@@ -121,5 +121,40 @@ class PreventDestroy(unittest.TestCase):
         self.assertEqual(check.main([str(f) for f in files]), 0)
 
 
+
+SERVER = 'resource "scaleway_instance_server" "source" {\n  count = 1\n}\n'
+
+
+class Exemption(unittest.TestCase):
+    """MAIR-1185: only the attack source server, in its own file, may be destroyed."""
+
+    def test_mair_1185_attack_source_server_is_exempt(self):
+        problems = check.unprotected(SERVER)
+        self.assertEqual(check.not_exempt("attack-source/main.tf", problems), [])
+
+    def test_mair_1185_same_resource_elsewhere_is_not_exempt(self):
+        problems = check.unprotected(SERVER)
+        self.assertEqual(
+            [label for _, label in check.not_exempt("orgs/mairie360/main.tf", problems)],
+            ["scaleway_instance_server.source"],
+        )
+
+    def test_mair_1185_other_resource_of_the_file_is_not_exempt(self):
+        text = SERVER + 'resource "scaleway_instance_ip" "source" {\n  type = "routed_ipv4"\n}\n'
+        problems = check.unprotected(text)
+        self.assertEqual(
+            [label for _, label in check.not_exempt("attack-source/main.tf", problems)],
+            ["scaleway_instance_ip.source"],
+        )
+
+    def test_mair_1185_exemption_list_is_only_the_attack_source_server(self):
+        self.assertEqual(
+            set(check.EXEMPT), {("attack-source/main.tf", "scaleway_instance_server.source")}
+        )
+
+    def test_mair_1185_repository_passes(self):
+        self.assertEqual(check.main([]), 0)
+
+
 if __name__ == "__main__":
     unittest.main()

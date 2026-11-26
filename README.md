@@ -22,6 +22,7 @@ modules/machine/      one machine: server + routed IPv4 + routed IPv6 + security
 modules/dns/          public names of one instance: <host>.<env>.<zone> -> its machine
 modules/naming/       bucket and vault names shared by orgs/ and iam/
 orgs/mairie360/       group mairie360: instances dev, staging, prod, Argo CD machine
+attack-source/        disposable source machine of the external attack campaigns (MAIR-1185), applied from a workstation only
 scripts/tf.sh         terraform in one root, S3 backend credentials from the scw profile
 scripts/bootstrap.sh  first creation of the state bucket
 scripts/plan-comment.sh  plan output as markdown (PR comment, job summary)
@@ -253,6 +254,29 @@ here without changing its `vault_entries`.
 A protected secret cannot be deleted, by the API or by Terraform, and every
 resource carries `prevent_destroy` (checked in CI by
 `tests/check_prevent_destroy.py`).
+
+## Attack source (MAIR-1185)
+
+The external attack campaigns on staging (rules of engagement: mairie360/Deploiment
+`docs/en/external-attack-campaigns.md`) run their heavy scenarios from a machine outside the
+instances: `attack-source/`, its own root and state (`attack-source.tfstate`).
+
+- `scaleway_instance_ip.source`: a reserved routed IPv4, kept between campaigns (`source_ip`
+  output), so the announcements and Scaleway always name the same address.
+- `scaleway_instance_security_group.source`: inbound dropped except SSH (`ssh_ranges`),
+  outbound open, Scaleway's SMTP block on.
+- `scaleway_instance_server.source`: only while `enabled = true`, in `fr-par-2` (never the
+  instances' zone `fr-par-1`, refused by validation), no private network. The only resource
+  without `prevent_destroy`, exempted by name in `tests/check_prevent_destroy.py`.
+
+For a campaign window, with a team member's approval like any apply (the CI keys have no
+`*Delete` right, so this root is never applied by the Apply workflow):
+
+```bash
+scripts/tf.sh attack-source apply -var enabled=true    # creates the server
+scripts/tf.sh attack-source output source_ip
+scripts/tf.sh attack-source apply -var enabled=false   # destroys it after the window
+```
 
 ## Usage
 
