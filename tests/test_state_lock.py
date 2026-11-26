@@ -10,7 +10,7 @@ ROOTS = [p.parent for p in REPO.glob("**/backend.tf") if ".terraform" not in p.p
 
 class StateLockTest(unittest.TestCase):
     def test_mair_634_every_backend_locks_the_state(self):
-        self.assertEqual({str(r.relative_to(REPO)) for r in ROOTS}, {"bootstrap", "iam", "orgs/mairie360"})
+        self.assertEqual({str(r.relative_to(REPO)) for r in ROOTS}, {"attack-source", "bootstrap", "iam", "orgs/mairie360"})
         for root in ROOTS:
             backend = (root / "backend.tf").read_text()
             self.assertRegex(backend, r'backend "s3" \{[^}]*use_lockfile\s*=\s*true', root.name)

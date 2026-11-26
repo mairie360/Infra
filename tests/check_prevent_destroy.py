@@ -2,8 +2,9 @@
 """Every `resource` block of the repository sets `lifecycle { prevent_destroy = true }`.
 
 Machines, buckets and secrets are imported or protected, never recreated
-(MAIR-613). There is no exemption: a resource that must be deletable has to
-change this check, in review.
+(MAIR-613). A resource that must be deletable has to change this check, in
+review: EXEMPT names it, with its file and the reason. The only one is the
+attack source server, destroyed after every external attack campaign.
 
 The check reads the HCL itself (standard library only): comments and string
 contents are ignored (template expressions `${...}` / `%{...}` included, with
@@ -23,6 +24,12 @@ from pathlib import Path
 # Heredoc delimiters are identifiers, which may contain hyphens.
 HEREDOC = re.compile(r"<<-?([A-Za-z_][\w-]*)")
 PROTECTED = re.compile(r"^\s*prevent_destroy\s*=\s*true\s*$", re.M)
+
+# (file relative to the repository root, "type.name") -> why it may be destroyed.
+EXEMPT = {
+    ("attack-source/main.tf", "scaleway_instance_server.source"):
+        "disposable source of the external attack campaigns, destroyed after each window",
+}
 
 
 def skip_string(text, i):
@@ -195,12 +202,25 @@ def tracked_tf_files(root):
         return [p for p in root.rglob("*.tf") if ".terraform" not in p.parts]
 
 
+def relative(path, root):
+    """`path` relative to the repository root, with forward slashes ("" when outside it)."""
+    try:
+        return path.resolve().relative_to(root).as_posix()
+    except ValueError:
+        return ""
+
+
+def not_exempt(rel, problems):
+    """`problems` of the file `rel` without the resources EXEMPT lists for it."""
+    return [(line, label) for line, label in problems if (rel, label) not in EXEMPT]
+
+
 def main(argv):
     root = Path(__file__).resolve().parent.parent
     files = [Path(a) for a in argv] or tracked_tf_files(root)
     status = 0
     for f in sorted(files):
-        for line, label in unprotected(f.read_text()):
+        for line, label in not_exempt(relative(f, root), unprotected(f.read_text())):
             if line == 0:
                 print(f"{f}: {label}")
             else:

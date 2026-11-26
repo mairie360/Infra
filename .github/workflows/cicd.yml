@@ -17,7 +17,7 @@ jobs:
     uses: mairie360/CICD/.github/workflows/terraform_cicd.yml@v5.12.0
     with:
       cicd_version: v5.12.0  # must match the terraform_cicd.yml ref above
-      roots: '["bootstrap", "iam", "modules/instance", "modules/machine", "orgs/mairie360"]'
+      roots: '["attack-source", "bootstrap", "iam", "modules/instance", "modules/machine", "orgs/mairie360"]'
     secrets:
       N8N_WEBHOOK_SECRET: ${{ secrets.N8N_WEBHOOK_SECRET }}
 
