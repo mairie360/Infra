@@ -1,6 +1,12 @@
 # MAIR-803: the IAM applications of the CI and their rights. No Scaleway
 # account used: the provider is mocked.
 mock_provider "scaleway" {
+  # Project of the attack source (campaigns.tf).
+  mock_resource "scaleway_account_project" {
+    defaults = {
+      id = "99999999-9999-9999-9999-999999999999"
+    }
+  }
   mock_resource "scaleway_iam_application" {
     defaults = {
       id = "22222222-2222-2222-2222-222222222222"

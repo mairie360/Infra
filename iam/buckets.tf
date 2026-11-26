@@ -192,6 +192,29 @@ resource "scaleway_object_bucket_policy" "state" {
           Action    = ["s3:DeleteObject"]
           Resource  = ["${var.state_bucket}/*.tflock"]
         },
+        {
+          # The spoofed e-mail test (campaigns.tf) applies attack-source/ only:
+          # its state and lock, nothing else of the bucket.
+          Sid       = "ci-spoof-test-state"
+          Effect    = "Allow"
+          Principal = { SCW = local.ci_spoof }
+          Action    = ["s3:GetObject", "s3:PutObject"]
+          Resource  = ["${var.state_bucket}/attack-source.tfstate", "${var.state_bucket}/attack-source.tfstate.tflock"]
+        },
+        {
+          Sid       = "ci-spoof-test-state-lock"
+          Effect    = "Allow"
+          Principal = { SCW = local.ci_spoof }
+          Action    = ["s3:DeleteObject"]
+          Resource  = ["${var.state_bucket}/attack-source.tfstate.tflock"]
+        },
+        {
+          Sid       = "ci-spoof-test-list"
+          Effect    = "Allow"
+          Principal = { SCW = local.ci_spoof }
+          Action    = ["s3:ListBucket"]
+          Resource  = [var.state_bucket]
+        },
       ],
       length(local.operators) == 0 ? [] : [{
         Sid       = "operators"

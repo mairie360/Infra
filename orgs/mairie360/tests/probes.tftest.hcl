@@ -15,6 +15,11 @@ mock_provider "scaleway" {
 }
 
 variables {
+  # The public names are tested in mair_1187_dns_mail.tftest.hcl: none here.
+  dns_zone             = null
+  extra_records        = {}
+  machine_records      = {}
+  resend_receiving_mx  = null
   imported_machines    = {}
   import_alert_manager = false
 }

@@ -28,7 +28,7 @@ variable "dns_zone" {
 }
 
 variable "extra_records" {
-  description = "Records of dns_zone outside the instances (mail, domain verification...), by a free key. The n8n machine gets n8n.<zone> on its own."
+  description = "Records outside the instances (mail, domain verification, third parties), by a free key. zone defaults to dns_zone; another zone of the project (mairie360.fr) is named explicitly. The n8n machine gets n8n.<zone> on its own, machine_records the names that follow a machine."
   type = map(object({
     name = string
     type = string
@@ -36,8 +36,37 @@ variable "extra_records" {
     ttl  = optional(number, 3600)
     # MX (and SRV) only: Scaleway sends it apart from data.
     priority = optional(number)
+    zone     = optional(string)
   }))
   default = {}
+
+  # Anti-spoofing (DMARC, external attack campaigns): a DMARC record enforces a
+  # policy and asks for aggregate reports; p=none would let a forged From: through.
+  validation {
+    condition = alltrue([
+      for r in values(var.extra_records) : can(regex("^v=DMARC1;.*\\bp=(quarantine|reject);.*\\brua=mailto:", r.data))
+      if r.type == "TXT" && can(regex("^_dmarc(\\.|$)", r.name))
+    ])
+    error_message = "A DMARC record sets p=quarantine or p=reject and a rua=mailto: report address."
+  }
+
+  # Two DMARC (or SPF) records on one name void both.
+  validation {
+    condition = alltrue([
+      for kind, pattern in { dmarc = "^v=DMARC1", spf = "^v=spf1" } : length([
+        for r in values(var.extra_records) : "${coalesce(r.zone, "dns_zone")}/${r.name}" if r.type == "TXT" && can(regex(pattern, r.data))
+        ]) == length(distinct([
+          for r in values(var.extra_records) : "${coalesce(r.zone, "dns_zone")}/${r.name}" if r.type == "TXT" && can(regex(pattern, r.data))
+      ]))
+    ])
+    error_message = "At most one DMARC record and one SPF record per name."
+  }
+}
+
+variable "machine_records" {
+  description = "A records of dns_zone that follow one machine of the group, by record name: an instance env (dev, staging, prod), argocd or n8n. For names outside <host>.<env> (env apex, wildcards, the Argo CD hub), so no address is written here."
+  type        = map(string)
+  default     = {}
 }
 
 variable "argocd_machine" {
@@ -89,4 +118,10 @@ variable "import_alert_manager" {
   description = "Adopt the alert manager already enabled in the console (true for mairie360; a new client project leaves it false)."
   type        = bool
   default     = false
+}
+
+variable "resend_receiving_mx" {
+  description = "MX target of the Resend receiving inbox on mairie360.fr (spoofed e-mail test of the external attack campaigns), as shown by Resend. null = no inbox."
+  type        = string
+  default     = null
 }

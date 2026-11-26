@@ -1,6 +1,12 @@
 # MAIR-619: one key per bucket, each limited to its bucket by the bucket
 # policies. Provider mocked.
 mock_provider "scaleway" {
+  # Project of the attack source (campaigns.tf).
+  mock_resource "scaleway_account_project" {
+    defaults = {
+      id = "99999999-9999-9999-9999-999999999999"
+    }
+  }
   mock_resource "scaleway_iam_application" {
     defaults = {
       id = "22222222-2222-2222-2222-222222222222"
@@ -91,10 +97,10 @@ run "state_bucket_reachable_by_the_ci_only" {
 
   assert {
     condition = (
-      length(jsondecode(scaleway_object_bucket_policy.state.policy).Statement) == 3
+      length(jsondecode(scaleway_object_bucket_policy.state.policy).Statement) == 6
       && !contains(one([for s in jsondecode(scaleway_object_bucket_policy.state.policy).Statement : s if s.Sid == "ci-plan-state"]).Action, "s3:PutObject")
     )
-    error_message = "Only the two CI applications reach the state, and the plan key cannot write it."
+    error_message = "Only the CI applications reach the state (the spoof test key its own objects), and the plan key cannot write it."
   }
 
   # MAIR-634: the apply key releases the state lock and deletes nothing else.
@@ -103,6 +109,8 @@ run "state_bucket_reachable_by_the_ci_only" {
       for s in jsondecode(scaleway_object_bucket_policy.state.policy).Statement :
       !contains(s.Action, "s3:DeleteObject") || (
         s.Sid == "ci-apply-state-lock" && s.Action == ["s3:DeleteObject"] && s.Resource == ["mairie360-tfstate/*.tflock"]
+        ) || (
+        s.Sid == "ci-spoof-test-state-lock" && s.Action == ["s3:DeleteObject"] && s.Resource == ["mairie360-tfstate/attack-source.tfstate.tflock"]
       )
     ])
     error_message = "On the state bucket the CI may only delete the lock objects (*.tflock), never a state."

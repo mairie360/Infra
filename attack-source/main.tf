@@ -4,9 +4,10 @@
 # behind a reserved IP that stays the same from one campaign to the next so
 # the announcements and Scaleway can name it.
 #
-# Applied and destroyed from a workstation only (scripts/tf.sh attack-source
-# apply), with a team member's approval: the CI keys hold no *Delete
-# permission.
+# Lives in its own project (mairie360-attack, iam/campaigns.tf). Applied and
+# destroyed from a workstation for a campaign window (scripts/tf.sh attack-source
+# apply, with a team member's approval), and by the monthly spoofed e-mail test
+# (.github/workflows/spoof-test.yml), whose key only reaches this project.
 
 resource "scaleway_instance_ip" "source" {
   type       = "routed_ipv4"
@@ -20,7 +21,8 @@ resource "scaleway_instance_ip" "source" {
 }
 
 # Inbound dropped but SSH; outbound open (the scenarios reach staging over
-# HTTPS), SMTP egress blocked by Scaleway's default security.
+# HTTPS), SMTP egress blocked by Scaleway's default security except during the
+# spoofed e-mail test.
 resource "scaleway_instance_security_group" "source" {
   name                    = "mairie360-attack-source"
   project_id              = var.project_id
@@ -28,7 +30,7 @@ resource "scaleway_instance_security_group" "source" {
   stateful                = true
   inbound_default_policy  = "drop"
   outbound_default_policy = "accept"
-  enable_default_security = true
+  enable_default_security = var.spoof_test == null
 
   dynamic "inbound_rule" {
     for_each = var.ssh_ranges
@@ -60,6 +62,11 @@ resource "scaleway_instance_server" "source" {
   ip_ids            = [scaleway_instance_ip.source.id]
   security_group_id = scaleway_instance_security_group.source.id
   tags              = ["attack-source", "mairie360"]
+
+  # The spoofed e-mail test sends its one message at first boot, no SSH needed.
+  user_data = var.spoof_test == null ? {} : {
+    cloud-init = templatefile("${path.module}/spoof-test.cloud-init.yaml", var.spoof_test)
+  }
 
   root_volume {
     volume_type = "sbs_volume"
