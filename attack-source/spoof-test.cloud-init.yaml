@@ -1,0 +1,13 @@
+#cloud-config
+# Spoofed e-mail test (variable spoof_test): one message with a forged From:,
+# sent straight to the recipient's MX (swaks resolves it), then nothing else.
+# The token in the subject lets the workflow find it in the Resend inbox.
+package_update: true
+packages:
+  - swaks
+runcmd:
+  - >-
+    swaks --to '${to}' --from '${from}'
+    --header 'Subject: mairie360 spoof test ${token}'
+    --body 'Spoofed e-mail test of the external attack campaigns. Token: ${token}'
+    > /var/log/spoof-test.log 2>&1

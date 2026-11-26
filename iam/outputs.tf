@@ -9,3 +9,13 @@ output "bucket_keys" {
     for k, b in local.instance_buckets : k => merge(b, { application_id = scaleway_iam_application.bucket[k].id })
   }
 }
+
+output "attack_project_id" {
+  description = "Project of the attack source: project_id of attack-source/terraform.tfvars."
+  value       = scaleway_account_project.attack.id
+}
+
+output "campaign_application_ids" {
+  description = "IAM application id of the attack campaign workflows (spoofed e-mail test, DNS reconnaissance): scw iam api-key create application-id=<id>."
+  value       = { for name, app in scaleway_iam_application.campaign : name => app.id }
+}

@@ -105,14 +105,33 @@ restart; apply it on dev first and check SSH, the sites and the tunnel.
 `modules/dns` names every Ingress host of an instance (`login`, `project`,
 `calendar`, `message`, `dashboard`, `settings`, `elearning`, `admin`, `auth`)
 `<host>.<env>.<dns_zone>`, pointing to the IPv4 of the instance's own machine;
-`n8n.<dns_zone>` follows the n8n machine, `extra_records` holds the rest (mail,
-verifications). Everything is off while `dns_zone` is null: `mairie360-eip.fr`
-is still served by o2switch. To switch: create the zone in Scaleway Domains,
-copy the records Terraform does not manage into `extra_records` (Resend
-DKIM/SPF/MX first, with `priority` on the MX records), apply from a
-workstation (the CI keys only read DNS records: the Domains write set is full
-access; apply `iam/` first so they can read them), then move the name servers
-at the registrar.
+`n8n.<dns_zone>` follows the n8n machine, `machine_records` the other names that
+follow a machine (env apexes, wildcards, `argocd-hub`), and `extra_records` holds
+the rest (mail, verifications, third parties). An `extra_records` entry with a
+`zone` lives in that zone (`mairie360.fr`); the others in `dns_zone`.
+
+`dns_zone = "mairie360-eip.fr"`: the zone moves from o2switch to
+Scaleway Domains. Order of the switch, from a workstation (the CI keys only read
+DNS records: the Domains write set is full access):
+
+1. add `mairie360-eip.fr` as an external domain in Scaleway Domains;
+2. compare `extra_records` with the o2switch zone export: every record must be
+   there (the team's mailbox, o2switch MX and DKIM, depends on it);
+3. `scripts/tf.sh orgs/mairie360 apply`, then check the zone in the console;
+4. move the name servers at the registrar to Scaleway's, and check that the
+   sites answer and that mail still comes in and goes out.
+
+**Anti-spoofing.** A DMARC record of `extra_records` must enforce
+`p=quarantine` or `p=reject` and send aggregate reports (`rua=mailto:`); one
+DMARC and one SPF record per name (variable validations). Both domains are on
+`p=quarantine` since 2026-11-26, reports to `dmarc@mairie360.fr` (the Resend
+inbox, authorised by `mairie360-eip.fr._report._dmarc.mairie360.fr`);
+`p=reject` on 2026-12-28 if the reports only show Resend and o2switch.
+`mairie360.fr` publishes `v=spf1 -all` (Resend signs with DKIM, its envelope is
+`send.mairie360.fr`). Its former `_dmarc` record (`p=none`, made in the console)
+is deleted by hand before the first apply. `resend_receiving_mx` (the MX Resend
+shows once receiving is enabled on `mairie360.fr`) makes every message to
+`@mairie360.fr` land in Resend: the spoofed e-mail test reads it there.
 
 ## Backup buckets (MAIR-618)
 
@@ -259,24 +278,37 @@ resource carries `prevent_destroy` (checked in CI by
 
 The external attack campaigns on staging (rules of engagement: mairie360/Deploiment
 `docs/en/external-attack-campaigns.md`) run their heavy scenarios from a machine outside the
-instances: `attack-source/`, its own root and state (`attack-source.tfstate`).
+instances: `attack-source/`, its own root and state (`attack-source.tfstate`), in its own
+project `mairie360-attack` (`iam/campaigns.tf`): the key that creates and destroys
+it cannot reach a machine of the platform. `project_id` refuses the platform's project.
 
 - `scaleway_instance_ip.source`: a reserved routed IPv4, kept between campaigns (`source_ip`
   output), so the announcements and Scaleway always name the same address.
 - `scaleway_instance_security_group.source`: inbound dropped except SSH (`ssh_ranges`),
-  outbound open, Scaleway's SMTP block on.
+  outbound open, Scaleway's SMTP block on (off only during the spoofed e-mail test).
 - `scaleway_instance_server.source`: only while `enabled = true`, in `fr-par-2` (never the
   instances' zone `fr-par-1`, refused by validation), no private network. The only resource
   without `prevent_destroy`, exempted by name in `tests/check_prevent_destroy.py`.
 
-For a campaign window, with a team member's approval like any apply (the CI keys have no
-`*Delete` right, so this root is never applied by the Apply workflow):
+For a campaign window, with a team member's approval like any apply:
 
 ```bash
 scripts/tf.sh attack-source apply -var enabled=true    # creates the server
 scripts/tf.sh attack-source output source_ip
 scripts/tf.sh attack-source apply -var enabled=false   # destroys it after the window
 ```
+
+### Spoofed e-mail test
+
+`.github/workflows/spoof-test.yml` (first Monday of the month and on demand, `main` only,
+environment `attack-spoof-test`) creates the source with `spoof_test`: SMTP egress open
+(Scaleway lifts its block when the security group's default security is off, on a verified
+account) and a cloud-init that sends, at boot, one e-mail with a forged `From:
+noreply@mairie360-eip.fr` to `spoof-test@mairie360.fr`, the Resend inbox. `scripts/spoof-check.py`
+checks that `_dmarc.mairie360-eip.fr` enforces `quarantine` or `reject` and that Resend judged
+the e-mail `dmarc=fail`, then the server is destroyed whatever happened. `spoof_test` only
+sends to `@mairie360.fr` as an address of a mairie360 domain (validation). Tests:
+`attack-source/tests/`, `tests/test_mair_1187_spoof_test.py`.
 
 ## Usage
 
@@ -318,11 +350,17 @@ own rights. The workstation is also the fallback when GitHub is unavailable.
 `iam/` creates one IAM application per workflow, limited to the group's
 project: `mairie360-ci-terraform-plan` (read-only), `mairie360-ci-terraform-apply`
 (state, create/update secrets; no delete, no IAM), `mairie360-ci-ansible`
-(read and add secret versions, for `mairie360/ansible`). No API key is created by
-Terraform: it would sit in the state. Once, after `scripts/tf.sh iam apply`:
+(read and add secret versions, for `mairie360/ansible`). The external attack campaigns
+(`iam/campaigns.tf`) add `mairie360-ci-spoof-test` (full Instances and Block Storage on the
+`mairie360-attack` project only, `attack-source.tfstate` and its lock on the state bucket:
+environment `attack-spoof-test` here, with `RESEND_API_KEY`, a Resend key that reads received
+e-mails) and `mairie360-ci-recon-dns` (`DomainsDNSReadOnly`: secret of the reconnaissance in
+mairie360/Deploiment). No API key is created by Terraform: it would sit in the state. Once,
+after `scripts/tf.sh iam apply`:
 
 ```bash
 scripts/tf.sh iam output -json ci_application_ids
+scripts/tf.sh iam output -json campaign_application_ids
 scw iam api-key create application-id=<id> description="mairie360/Infra infra-plan" -o json
 ```
 

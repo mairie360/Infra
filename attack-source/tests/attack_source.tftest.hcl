@@ -98,3 +98,80 @@ run "mair_1185_instances_zone_refused" {
 
   expect_failures = [var.zone]
 }
+
+run "mair_1187_platform_project_refused" {
+  command = plan
+
+  variables {
+    project_id = "716a44bd-7d6f-4940-87ca-711e62799cd0"
+  }
+
+  expect_failures = [var.project_id]
+}
+
+run "mair_1187_spoof_test_opens_smtp_and_sends_at_boot" {
+  command = apply
+
+  variables {
+    enabled    = true
+    spoof_test = { to = "spoof-test@mairie360.fr", from = "noreply@mairie360-eip.fr", token = "testtokentesttoken" }
+  }
+
+  assert {
+    condition     = !scaleway_instance_security_group.source.enable_default_security
+    error_message = "The spoofed e-mail test lifts Scaleway's SMTP egress block."
+  }
+
+  assert {
+    condition = (
+      strcontains(scaleway_instance_server.source[0].user_data["cloud-init"], "swaks --to 'spoof-test@mairie360.fr' --from 'noreply@mairie360-eip.fr'")
+      && strcontains(scaleway_instance_server.source[0].user_data["cloud-init"], "spoof test testtokentesttoken")
+    )
+    error_message = "The server sends the spoofed e-mail with its token at first boot."
+  }
+}
+
+run "mair_1187_no_spoof_test_keeps_smtp_blocked_and_no_user_data" {
+  command = apply
+
+  variables {
+    enabled = true
+  }
+
+  assert {
+    condition     = scaleway_instance_security_group.source.enable_default_security && length(scaleway_instance_server.source[0].user_data) == 0
+    error_message = "A campaign window without the spoof test keeps SMTP blocked and runs nothing at boot."
+  }
+}
+
+run "mair_1187_spoof_test_needs_the_server" {
+  command = plan
+
+  variables {
+    spoof_test = { to = "spoof-test@mairie360.fr", from = "noreply@mairie360-eip.fr", token = "testtokentesttoken" }
+  }
+
+  expect_failures = [var.spoof_test]
+}
+
+run "mair_1187_spoof_test_only_to_the_resend_inbox" {
+  command = plan
+
+  variables {
+    enabled    = true
+    spoof_test = { to = "someone@gmail.com", from = "noreply@mairie360-eip.fr", token = "testtokentesttoken" }
+  }
+
+  expect_failures = [var.spoof_test]
+}
+
+run "mair_1187_spoof_test_only_as_a_mairie360_domain" {
+  command = plan
+
+  variables {
+    enabled    = true
+    spoof_test = { to = "spoof-test@mairie360.fr", from = "ceo@example.com", token = "testtokentesttoken" }
+  }
+
+  expect_failures = [var.spoof_test]
+}

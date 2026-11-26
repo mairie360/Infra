@@ -19,12 +19,18 @@ rebuilt from scratch; secrets are created here and filled by `mairie360/ansible`
 - CI keys stay least-privilege (`iam/tests/`): no IAM, no `*Delete`, no `*FullAccess` (one exception: `ObservabilityFullAccess` on the apply key,
   Cockpit has no finer write set, MAIR-620), the plan
   key read-only; a new resource type in `orgs/` may need a new permission set in `iam/`.
+  The attack campaign keys (`iam/campaigns.tf`, MAIR-1187) are the other exception: full
+  Instances / Block Storage on the `mairie360-attack` project only (never the platform's), the
+  state bucket limited to `attack-source.tfstate` by its policy.
 - Every resource sets `lifecycle { prevent_destroy = true }`
   (`tests/check_prevent_destroy.py`); secrets also set `protected = true`. One named
   exemption (`EXEMPT` in the check): the server of `attack-source/`, the disposable source of
   the external attack campaigns (MAIR-1185), created with `enabled = true` for a window and
-  destroyed with `enabled = false`, from a workstation only. Its reserved IP and security
-  group stay protected.
+  destroyed with `enabled = false`, from a workstation or by the monthly spoofed e-mail test
+  (`spoof-test.yml`, MAIR-1187). Its reserved IP and security group stay protected.
+- `mairie360-eip.fr` is managed here (`dns_zone`, MAIR-1187): a record missing from
+  `extra_records` disappears at the next apply once the name servers point to Scaleway. A
+  DMARC record must enforce quarantine/reject with `rua` (validation).
 - The vault secret names and the `/<org>/<env>` path are a contract with role
   `k8s_instance_secrets` of `ansible` (`vault_entries`, `vault_path`).
 - CI: `.github/workflows/cicd.yml` calls `terraform_cicd.yml` of `mairie360/CICD` pinned by
